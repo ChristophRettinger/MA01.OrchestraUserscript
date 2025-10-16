@@ -66,11 +66,13 @@
     const ROW_SELECTOR = ".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)";
     const PROCESS_OVERVIEW_HASH = "#scenario/processOverview/";
     const PROCESSES_HASH = "#scenario/.*/processes/";
-    const ENABLED_BUTTON_COLOR = "#c99999";
+    const ENABLED_BUTTON_COLOR = "#A9D0F5";
     const DISABLED_BUTTON_COLOR = "#d6d6d6";
     const BUTTON_PARENT_SELECTOR = ".header-holder";
     const BUTTON_PANEL_WIDTH = 220;
-    const BUTTON_PANEL_HEADER_TEXT = "Helper Tools";
+    const BUTTON_PANEL_HEADER_TEXT = "Orchestra Tools";
+    const BUTTON_PANEL_COLLAPSED_ICON = "🎛️";
+    const BUTTON_PANEL_COLLAPSED_SIZE = 36;
     const MSG_ID_CELL_SELECTOR = ".mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell";
 
     const isProcessOverviewContext = () => window.location.hash.includes(PROCESS_OVERVIEW_HASH);
@@ -129,7 +131,8 @@
             border: "1px solid black",
             cursor: "pointer",
             padding: "2px 4px",
-            fontWeight: "bold"
+            fontWeight: "bold",
+            transition: "background 0.2s ease"
         });
 
         const content = document.createElement("div");
@@ -142,9 +145,51 @@
         });
 
         const applyCollapsedState = () => {
-            toggleButton.textContent = (helperPanelCollapsed ? "[+] " : "[-] ") + BUTTON_PANEL_HEADER_TEXT;
-            toggleButton.setAttribute("aria-expanded", (!helperPanelCollapsed).toString());
-            content.style.display = helperPanelCollapsed ? "none" : "flex";
+            const expanded = !helperPanelCollapsed;
+            toggleButton.setAttribute("aria-expanded", expanded.toString());
+            toggleButton.setAttribute(
+                "aria-label",
+                expanded ? `Collapse ${BUTTON_PANEL_HEADER_TEXT}` : `Expand ${BUTTON_PANEL_HEADER_TEXT}`
+            );
+            toggleButton.title = expanded ? `Collapse ${BUTTON_PANEL_HEADER_TEXT}` : `Expand ${BUTTON_PANEL_HEADER_TEXT}`;
+            content.style.display = expanded ? "flex" : "none";
+
+            if (expanded) {
+                wrapper.style.width = BUTTON_PANEL_WIDTH + "px";
+                wrapper.style.background = "#f5f5f5";
+                wrapper.style.border = "1px solid black";
+                wrapper.style.padding = "6px";
+                wrapper.style.height = "auto";
+
+                toggleButton.textContent = "[-] " + BUTTON_PANEL_HEADER_TEXT;
+                toggleButton.style.background = "#bdbdbd";
+                toggleButton.style.border = "1px solid black";
+                toggleButton.style.padding = "2px 4px";
+                toggleButton.style.fontSize = "12px";
+                toggleButton.style.display = "block";
+                toggleButton.style.width = "100%";
+                toggleButton.style.height = "auto";
+                toggleButton.style.borderRadius = "0";
+                wrapper.style.boxShadow = "none";
+            } else {
+                wrapper.style.width = BUTTON_PANEL_COLLAPSED_SIZE + "px";
+                wrapper.style.background = "transparent";
+                wrapper.style.border = "none";
+                wrapper.style.padding = "0";
+                wrapper.style.height = BUTTON_PANEL_COLLAPSED_SIZE + "px";
+
+                toggleButton.textContent = BUTTON_PANEL_COLLAPSED_ICON;
+                toggleButton.style.background = "transparent";
+                toggleButton.style.border = "none";
+                toggleButton.style.padding = "0";
+                toggleButton.style.fontSize = "20px";
+                toggleButton.style.display = "flex";
+                toggleButton.style.alignItems = "center";
+                toggleButton.style.justifyContent = "center";
+                toggleButton.style.width = BUTTON_PANEL_COLLAPSED_SIZE + "px";
+                toggleButton.style.height = BUTTON_PANEL_COLLAPSED_SIZE + "px";
+                toggleButton.style.borderRadius = BUTTON_PANEL_COLLAPSED_SIZE / 2 + "px";
+            }
         };
 
         toggleButton.addEventListener("click", () => {
@@ -168,10 +213,21 @@
     }
 
     /**
-     * Renders a temporary toast message so users get quick feedback from helper actions.
+     * Renders a toast message so users get quick feedback from helper actions.
+     * Supports persistent toasts with inline action buttons and returns a controller
+     * that can update or dismiss the toast programmatically.
+     *
+     * @param {string|Node} message - Toast content. Strings become text nodes; DOM nodes are inserted directly.
+     * @param {{type?: string, durationMs?: number, persistent?: boolean, actions?: Array<{label: string, ariaLabel?: string, onClick?: (event: MouseEvent) => void}>}} options
+     * @returns {{update: (newMessage: string|Node) => void, dismiss: () => void, element: HTMLElement}}
      */
     function showToast(message, options = {}) {
-        const { type = "info", durationMs = DEFAULT_TOAST_DURATION_MS } = options;
+        const {
+            type = "info",
+            durationMs = DEFAULT_TOAST_DURATION_MS,
+            persistent = false,
+            actions = []
+        } = options;
         if (!toastContainer) {
             toastContainer = document.createElement("div");
             Object.assign(toastContainer.style, {
@@ -198,9 +254,66 @@
             boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
             opacity: "0",
             transform: "translateY(-10px)",
-            transition: "opacity 0.2s ease, transform 0.2s ease"
+            transition: "opacity 0.2s ease, transform 0.2s ease",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            minWidth: "220px"
         });
-        toast.textContent = message;
+
+        const messageSpan = document.createElement("span");
+        messageSpan.style.display = "block";
+        const setMessageContent = (content) => {
+            if (content instanceof Node) {
+                messageSpan.replaceChildren(content);
+            } else {
+                messageSpan.replaceChildren();
+                messageSpan.textContent = typeof content === "string" ? content : String(content ?? "");
+            }
+        };
+        setMessageContent(message);
+        toast.appendChild(messageSpan);
+
+        if (Array.isArray(actions) && actions.length > 0) {
+            const actionsWrapper = document.createElement("div");
+            Object.assign(actionsWrapper.style, {
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px"
+            });
+
+            actions.forEach((action) => {
+                if (!action || typeof action.label !== "string") {
+                    return;
+                }
+                const actionButton = document.createElement("button");
+                actionButton.type = "button";
+                actionButton.textContent = action.label;
+                if (action.ariaLabel) {
+                    actionButton.setAttribute("aria-label", action.ariaLabel);
+                }
+                Object.assign(actionButton.style, {
+                    background: "rgba(255, 255, 255, 0.15)",
+                    color: "#fff",
+                    border: "1px solid rgba(255, 255, 255, 0.4)",
+                    borderRadius: "3px",
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    fontSize: "11px"
+                });
+                actionButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    if (typeof action.onClick === "function") {
+                        action.onClick(event);
+                    }
+                });
+                actionsWrapper.appendChild(actionButton);
+            });
+
+            if (actionsWrapper.childElementCount > 0) {
+                toast.appendChild(actionsWrapper);
+            }
+        }
         toast.setAttribute("role", "status");
         toast.setAttribute("aria-live", "polite");
 
@@ -211,8 +324,8 @@
             toast.style.transform = "translateY(0)";
         });
 
-        const safeDuration = Math.max(1000, durationMs);
-
+        let timeoutId = null;
+        let dismissed = false;
         const teardown = () => {
             toast.remove();
             if (toastContainer && toastContainer.childElementCount === 0) {
@@ -221,11 +334,37 @@
             }
         };
 
-        setTimeout(() => {
+        const startDismiss = () => {
+            if (dismissed) {
+                return;
+            }
+            dismissed = true;
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
             toast.style.opacity = "0";
             toast.style.transform = "translateY(-10px)";
             toast.addEventListener("transitionend", teardown, { once: true });
-        }, safeDuration);
+        };
+
+        if (!persistent) {
+            const safeDuration = Math.max(1000, durationMs);
+            timeoutId = window.setTimeout(startDismiss, safeDuration);
+        }
+
+        const controller = {
+            element: toast,
+            update(newMessage) {
+                if (!dismissed) {
+                    setMessageContent(newMessage);
+                }
+            },
+            dismiss() {
+                startDismiss();
+            }
+        };
+
+        return controller;
     }
 
     /**
@@ -289,14 +428,53 @@
         return `ScenarioName:ITI_SUBFL_SAP_HCM_empfangen_129 and Environment:production and ( ${clauses.join(" or ")} )`;
     }
 
+    /**
+     * Collects BuKeys from the scenario table. Displays a cancellable progress toast
+     * so the user can stop the automation while it iterates over rows.
+     *
+     * @returns {Promise<string[]|null>} Array of BuKey strings or null when the user cancels the run.
+     */
     async function getBuKeysArray() {
 
         let bukeys = [];
 
-        // Get rows
-        const rows = document.querySelectorAll(".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)");
+        const rows = Array.from(document.querySelectorAll(".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)"));
+        const totalRows = rows.length;
+        if (!totalRows) {
+            return bukeys;
+        }
 
-        for (const row of rows) {
+        let cancelled = false;
+        let processedCount = 0;
+        let progressToast = null;
+
+        const cancelAction = {
+            label: "Cancel",
+            ariaLabel: "Cancel BuKey processing",
+            onClick: () => {
+                cancelled = true;
+                if (progressToast) {
+                    progressToast.update("Cancelling…");
+                    progressToast.dismiss();
+                }
+            }
+        };
+
+        progressToast = showToast(`Processing row 1 of ${totalRows}…`, {
+            type: "info",
+            persistent: true,
+            actions: [cancelAction]
+        });
+
+        for (const [index, row] of rows.entries()) {
+            if (cancelled) {
+                break;
+            }
+
+            processedCount = index + 1;
+            if (progressToast) {
+                progressToast.update(`Processing row ${processedCount} of ${totalRows}…`);
+            }
 
             const processNameCell = row.querySelector("td:nth-child(6)");
             if (!processNameCell) {
@@ -348,6 +526,15 @@
             await waitForElementRemoval(cancelButton);
         }
 
+        if (progressToast) {
+            progressToast.dismiss();
+        }
+
+        if (cancelled) {
+            showToast(`Cancelled after processing ${processedCount} of ${totalRows} rows.`, { type: "warning" });
+            return null;
+        }
+
         return bukeys;
     }
 
@@ -355,6 +542,9 @@
     {
         try {
             const buKeys = await getBuKeysArray();
+            if (buKeys === null) {
+                return;
+            }
             const normalizedKeys = Array.isArray(buKeys)
                 ? buKeys.filter(Boolean)
                 : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);
@@ -377,6 +567,9 @@
     {
         try {
             const buKeys = await getBuKeysArray();
+            if (buKeys === null) {
+                return;
+            }
             const normalizedKeys = Array.isArray(buKeys)
                 ? buKeys.filter(Boolean)
                 : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);

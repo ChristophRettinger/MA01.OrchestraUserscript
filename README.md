@@ -6,10 +6,12 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 
 * Get Startup BuKeys:
   Opens up the startup information from all processes on current page and extracts the BuKeys string.
+  A cancellable progress toast keeps track of the processed rows so you can stop the run at any time.
   The helper copies the joined BuKeys to the clipboard and shows a toast summarising the number of keys processed.
 
 * Get Startup BuKeys (Elastic)
   Opens up the startup information from all processes on current page and extracts the BuKeys string. The result is convertet to an Elastic query to find the origin processes.
+  The cancellable progress toast is reused so you can interrupt the data gathering.
   A success toast confirms the copy action and references how many keys were included; warnings appear when no usable keys were found.
 
 * Copy Selected MSGIDs
@@ -22,4 +24,4 @@ The helper buttons become active only on the process overview page (`#scenario/p
 
 ## Helper Panel
 
-The buttons are grouped inside a collapsible panel pinned to the top right of the header. Use the [+]/[-] toggle to expand or collapse the tools without losing access to the page content. Each helper now shows a leading icon so actions are easier to spot at a glance.
+The buttons are grouped inside a collapsible panel pinned to the top right of the header. When collapsed the "Orchestra Tools" panel shrinks to a small circular icon so it stays out of the way while remaining accessible. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance.
