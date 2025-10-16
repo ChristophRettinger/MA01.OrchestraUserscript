@@ -22,6 +22,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   Opens the Business view tab, prepares the MSGID filters, pastes the resolved MSGID, and triggers the search button.
   The helper reuses the same MSGID resolution logic as the copy helper and issues a toast describing the search parameters.
   A 22-digit MSGID present on the clipboard is reused automatically and the button caption highlights this by appending "(from clipboard)".
+  When clipboard access is blocked by the browser, the helper now falls back gracefully without spamming warnings or freezing the page; manual button presses still retry the clipboard lookup so you can approve the permission dialog and continue working.
 
 ## Availability
 

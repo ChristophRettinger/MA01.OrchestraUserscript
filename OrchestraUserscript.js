@@ -244,18 +244,43 @@
         return msgIds;
     }
 
-    async function readMsgIdsFromClipboard() {
+    const clipboardState = {
+        isSupported: typeof navigator?.clipboard?.readText === 'function',
+        isBlocked: false,
+        hasLoggedError: false
+    };
+
+    function handleClipboardReadError(error) {
+        clipboardState.isBlocked = true;
+        if (!clipboardState.hasLoggedError) {
+            console.warn('Unable to read MSGID from clipboard', error);
+            clipboardState.hasLoggedError = true;
+        }
+    }
+
+    async function readMsgIdsFromClipboard({ ignoreBlocked = false } = {}) {
+        if (!clipboardState.isSupported) {
+            return [];
+        }
+
+        if (clipboardState.isBlocked && !ignoreBlocked) {
+            return [];
+        }
+
         try {
             const clipboardText = await navigator.clipboard.readText();
             if (!clipboardText) {
+                clipboardState.isBlocked = false;
                 return [];
             }
+
+            clipboardState.isBlocked = false;
             return clipboardText
                 .split(/[\s,;]+/)
                 .map((value) => value.trim())
                 .filter((value) => MSGID_CLIPBOARD_PATTERN.test(value));
         } catch (error) {
-            console.warn('Unable to read MSGID from clipboard', error);
+            handleClipboardReadError(error);
             return [];
         }
     }
@@ -273,7 +298,7 @@
         }
 
         if (includeClipboard) {
-            const clipboardMsgIds = await readMsgIdsFromClipboard();
+            const clipboardMsgIds = await readMsgIdsFromClipboard({ ignoreBlocked: true });
             if (clipboardMsgIds.length) {
                 return { msgIds: clipboardMsgIds, source: 'clipboard' };
             }
