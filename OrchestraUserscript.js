@@ -83,8 +83,21 @@
      */
     const hasReadableRows = () => document.querySelectorAll(ROW_SELECTOR).length > 0;
 
+    /**
+     * Checks whether the currently selected tab exposes either the Details
+     * or Business view content which is required for the helpers to operate.
+     */
+    const isDetailsOrBusinessViewTab = () => {
+        const labelElement = document.querySelector(".mTabCaption-selected .mTabCaption-label");
+        if (!labelElement || typeof labelElement.textContent !== "string") {
+            return false;
+        }
+        const text = labelElement.textContent.toLowerCase();
+        return text.includes("details") || text.includes("business view");
+    };
+
     let helperPanel = null;
-    let helperPanelCollapsed = false;
+    let helperPanelCollapsed = true;
 
     let toastContainer = null;
 
@@ -160,6 +173,7 @@
                 wrapper.style.border = "1px solid black";
                 wrapper.style.padding = "6px";
                 wrapper.style.height = "auto";
+                wrapper.style.borderRadius = "0";
 
                 toggleButton.textContent = "[-] " + BUTTON_PANEL_HEADER_TEXT;
                 toggleButton.style.background = "#bdbdbd";
@@ -172,14 +186,17 @@
                 toggleButton.style.borderRadius = "0";
                 wrapper.style.boxShadow = "none";
             } else {
-                wrapper.style.width = BUTTON_PANEL_COLLAPSED_SIZE + "px";
-                wrapper.style.background = "transparent";
-                wrapper.style.border = "none";
-                wrapper.style.padding = "0";
-                wrapper.style.height = BUTTON_PANEL_COLLAPSED_SIZE + "px";
+                const collapsedPadding = 4;
+                const collapsedDiameter = BUTTON_PANEL_COLLAPSED_SIZE + collapsedPadding * 2;
+                wrapper.style.width = collapsedDiameter + "px";
+                wrapper.style.background = "#ffffff";
+                wrapper.style.border = "1px solid black";
+                wrapper.style.padding = collapsedPadding + "px";
+                wrapper.style.height = collapsedDiameter + "px";
+                wrapper.style.borderRadius = collapsedDiameter / 2 + "px";
 
                 toggleButton.textContent = BUTTON_PANEL_COLLAPSED_ICON;
-                toggleButton.style.background = "transparent";
+                toggleButton.style.background = "#ffffff";
                 toggleButton.style.border = "none";
                 toggleButton.style.padding = "0";
                 toggleButton.style.fontSize = "20px";
@@ -710,7 +727,7 @@
          */
         const updateButtonState = () => {
             //console.log("Check " + isProcessesContext()+ " " + hasReadableRows());
-            const baseEnabled = isProcessesContext() && hasReadableRows();
+            const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
             buttons.forEach((button) => {
                 //console.log("  Checkbutton " + (button.isActionAvailable ? button.isActionAvailable() : true));
                 const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;

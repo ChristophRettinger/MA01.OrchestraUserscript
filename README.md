@@ -20,8 +20,8 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 
 ## Availability
 
-The helper buttons become active only on the process overview page (`#scenario/processOverview/`) and when at least one process row is available. In all other cases the buttons stay greyed out to prevent running the helpers without data. The MSGID helper needs at least one `_MSGID` value in the hovered or selected rows before it enables.
+The helper buttons become active only on the process overview page (`#scenario/processOverview/`), when at least one process row is available, and while the "Details" or "Business view" tab is selected. In all other cases the buttons stay greyed out to prevent running the helpers without data. The MSGID helper needs at least one `_MSGID` value in the hovered or selected rows before it enables.
 
 ## Helper Panel
 
-The buttons are grouped inside a collapsible panel pinned to the top right of the header. When collapsed the "Orchestra Tools" panel shrinks to a small circular icon so it stays out of the way while remaining accessible. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance.
+The buttons are grouped inside a collapsible panel pinned to the top right of the header. The panel now starts collapsed so the "Orchestra Tools" controls stay out of the way by default. When collapsed the toggle button shows a circular icon with a white background and black border to keep it visible against the page chrome. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance.
