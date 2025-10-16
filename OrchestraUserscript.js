@@ -43,7 +43,8 @@
             width: 200,
             headerText: 'Orchestra Tools',
             collapsedIcon: '🛠',
-            collapsedSize: 26
+            collapsedSize: 26,
+            zIndex: 2147483647
         },
         colors: {
             buttonEnabled: '#A9D0F5',
@@ -609,10 +610,11 @@
 
             this.wrapper = createElement('div');
             applyStyles(this.wrapper, {
+                // Keep the helper panel above modal overlays such as the scenario detail window.
                 position: 'absolute',
                 top: '5px',
                 right: '5px',
-                zIndex: '9999',
+                zIndex: String(CONFIG.panel.zIndex),
                 fontFamily: 'inherit',
                 fontSize: '12px'
             });
