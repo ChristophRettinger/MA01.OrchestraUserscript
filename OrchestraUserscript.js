@@ -762,10 +762,10 @@
 
     function initializeHelperPanel() {
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
-            const host = parent || document.body;
+            const host = document.body; // must be body due to iframe constraints
             const buttons = [
-                addButton(host, { label: 'Get Startup BuKeys', icon: '🔑', onClick: copyBuKeys }),
-                addButton(host, { label: 'Get Startup BuKeys (Elastic)', icon: '🧭', onClick: copyElastic }),
+                addButton(host, { label: 'Copy Startup BuKeys', icon: '🔑', onClick: copyBuKeys }),
+                addButton(host, { label: 'Copy Startup for Elastic', icon: '🧭', onClick: copyElastic }),
                 addButton(host, {
                     label: 'Copy Selected MSGIDs',
                     icon: '📋',
