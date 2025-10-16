@@ -1089,7 +1089,7 @@
                     isActionAvailable: hasMsgIdSource
                 }),
                 addButton(host, {
-                    label: 'Search MSGID in Business view',
+                    label: 'Search MSGID',
                     icon: '🔎',
                     onClick: searchMsgIdInBusinessView,
                     isActionAvailable: hasMsgIdSource
