@@ -38,6 +38,20 @@
         return new Promise(resolve => setTimeout(resolve, durationMs));
     }
 
+    const ROW_SELECTOR = ".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)";
+    const PROCESS_OVERVIEW_HASH = "#scenario/processOverview/";
+    const PROCESSES_HASH = "#scenario/.*/processes/";
+    const ENABLED_BUTTON_COLOR = "#c99999";
+    const DISABLED_BUTTON_COLOR = "#d6d6d6";
+
+    const isProcessOverviewContext = () => window.location.hash.match(PROCESS_OVERVIEW_HASH) !== null;
+    const isProcessesContext = () => window.location.hash.match(PROCESSES_HASH) !== null;
+
+    /**
+     * Returns true when the scenario chooser has at least one data row (excluding the header).
+     */
+    const hasReadableRows = () => document.querySelectorAll(ROW_SELECTOR).length > 0;
+
     /**
      * Build Elastic query string for given HCM→HL7(v3) SUBFL rows.
      * BK prefix is fixed. You can specify which fields to use (default: _CASENO_ISH, SUBFL_category, SUBFL_changedate, _PID_ISH, _HCMMSGEVENT, _UNIT)
@@ -149,29 +163,79 @@
 
     function addButton(parentSelector, top, text, onClickHandler) {
         const parent = document.querySelector(parentSelector);
-        if (!parent) return;
+        if (!parent) return null;
 
         const div = document.createElement("div");
         div.textContent = text;
+        div.setAttribute("role", "button");
         Object.assign(div.style, {
             position: "absolute",
             top: top + "px",
             right: "10px",
             width: "180px",
-            background: "#c99999",
+            background: ENABLED_BUTTON_COLOR,
             cursor: "pointer",
             border: "1px solid black",
             padding: "0px 5px"
         });
 
-        div.addEventListener("click", onClickHandler);
+        const handleClick = (event) => {
+            if (div.dataset.enabled !== "true") {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+            onClickHandler(event);
+        };
+
+        div.addEventListener("click", handleClick);
         parent.appendChild(div);
+
+        const controller = {
+            element: div,
+            setEnabled(isEnabled) {
+                const value = Boolean(isEnabled);
+                div.dataset.enabled = value ? "true" : "false";
+                div.style.cursor = value ? "pointer" : "not-allowed";
+                div.style.opacity = value ? "1" : "0.5";
+                div.style.background = value ? ENABLED_BUTTON_COLOR : DISABLED_BUTTON_COLOR;
+                div.style.pointerEvents = value ? "auto" : "none";
+                div.setAttribute("aria-disabled", value ? "false" : "true");
+                div.tabIndex = value ? 0 : -1;
+            }
+        };
+
+        controller.setEnabled(false);
+        return controller;
     }
 
     console.log("Orchestra Helper Functions loaded");
 
     waitForElm(".header-holder").then(() => {
-        addButton(".header-holder", 2, "Get Startup BuKeys", copyBuKeys);
-        addButton(".header-holder", 20, "Get Startup BuKeys (Elastic)", copyElastic);
+        const buttons = [
+            addButton(".header-holder", 2, "Get Startup BuKeys", copyBuKeys),
+            addButton(".header-holder", 20, "Get Startup BuKeys (Elastic)", copyElastic)
+        ].filter(Boolean);
+
+        if (!buttons.length) {
+            return;
+        }
+
+        /**
+         * Enable or disable helper buttons depending on the current page context.
+         * Buttons only make sense on the process overview page when rows are present.
+         */
+        const updateButtonState = () => {
+            console.log("Check button state: " +  isProcessesContext() + " " + hasReadableRows());
+            const enabled = isProcessesContext() && hasReadableRows();
+            buttons.forEach((button) => button.setEnabled(enabled));
+        };
+
+        window.addEventListener("hashchange", updateButtonState);
+
+        const domObserver = new MutationObserver(updateButtonState);
+        domObserver.observe(document.body, { childList: true, subtree: true });
+
+        updateButtonState();
     });
 })();

@@ -2,6 +2,8 @@
 
 The Userscript provides functionalities for the Orchestra Monitor website. It can be loaded e.g. using Tampermonkey.
 
+Buttons are only clickable if the function makes sense.
+
 ## Functions
 
 * Get Startup BuKeys:
