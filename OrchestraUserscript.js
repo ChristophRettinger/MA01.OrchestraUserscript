@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orchestra Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-15
+// @version      2025-10-22
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
@@ -22,7 +22,18 @@
             popup: '.gwt-DecoratedPopupPanel',
             popupKeyCell: '.gwt-TabPanelBottom td.dialogTable-key',
             popupCancelCell: '.mButtonBar td.middleCenter',
-            selectedTabLabel: '.mTabCaption-selected .mTabCaption-label'
+            selectedTabLabel: '.mTabCaption-selected .mTabCaption-label',
+            businessViewTabItems: '.gwt-TabBarItem',
+            businessViewTabLabel: '.mTabCaption-label',
+            businessViewTextBoxes: '.mListBox-textBox',
+            businessViewListRows: 'tr.mListBox-list-row > td',
+            businessViewAddButton: "img.img[src='images/add.png']",
+            businessViewRemoveButton: "img.img[src='images/remove.png']",
+            businessViewInputs: '.gwt-TextBox',
+            businessViewSearchButtons: 'table.mButton div.mButton-label',
+            scenarioDetailKeyCell: '.dialogTable-key',
+            scenarioDetailValueCell: '.dialogTable-value',
+            scenarioDetailCloseButton: '.windowButton-close'
         },
         routes: {
             processOverviewHash: '#scenario/processOverview/',
@@ -63,8 +74,79 @@
         helperPanel: null
     };
 
+    const MSGID_LABELS = ['_MSGID', 'MSGID'];
+    const BUSINESS_VIEW_LABELS = ['business view', 'business-ansicht', 'business ansicht', 'business - ansicht'];
+    const BUSINESS_KEY_PLACEHOLDERS = ['please select a business key', 'bitte wählen sie einen business-schlüssel'];
+    const CONNECTOR_AND_LABELS = ['and', 'und'];
+    const CONNECTOR_OR_LABELS = ['or', 'oder'];
+    const MSGID_SOURCE_LABELS = {
+        selection: 'selected rows',
+        scenarioDetail: 'scenario detail',
+        clipboard: 'clipboard'
+    };
+
+    const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const dispatchMouseClick = (element) => {
+        if (!element) {
+            return;
+        }
+        element.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        }));
+    };
+
     function applyStyles(element, ...styles) {
         styles.filter(Boolean).forEach((style) => Object.assign(element.style, style));
+    }
+
+    // Drives the Business view UI to search for the resolved MSGID automatically.
+    async function searchMsgIdInBusinessView() {
+        try {
+            const { msgIds, source } = await resolveMsgIds({ includeClipboard: true, closeScenarioDetail: true });
+            if (!msgIds.length) {
+                showToast('No MSGID available. Select a row, open the scenario detail, or copy an MSGID first.', { type: 'warning' });
+                return;
+            }
+
+            const msgId = msgIds[0];
+            try {
+                await navigator.clipboard.writeText(msgId);
+            } catch (clipboardError) {
+                console.warn('Unable to update clipboard before Business view search', clipboardError);
+            }
+
+            const businessViewReady = await ensureBusinessViewTabSelected();
+            if (!businessViewReady) {
+                showToast('Business view tab is not available on this page.', { type: 'error' });
+                return;
+            }
+
+            const selectorsReady = await ensureBusinessViewKeySelectors();
+            await ensureBusinessViewConnectorIsOr();
+
+            if (!selectorsReady) {
+                showToast('Business view key selection could not be fully automated. Please verify the filters.', { type: 'warning' });
+            }
+
+            if (!fillBusinessViewInputs(msgId)) {
+                showToast('Failed to locate the Business view input fields.', { type: 'error' });
+                return;
+            }
+
+            if (!triggerBusinessViewSearch()) {
+                showToast('Could not trigger the Business view search button.', { type: 'error' });
+                return;
+            }
+
+            const sourceLabel = source ? MSGID_SOURCE_LABELS[source] : 'current context';
+            showToast(`Searching Business view for MSGID ${msgId} (${sourceLabel}).`, { type: 'success' });
+        } catch (error) {
+            console.error('Failed to search MSGID in Business view', error);
+            showToast('Failed to search the Business view. Check console for details.', { type: 'error' });
+        }
     }
 
     function createElement(tagName, { attributes = {}, textContent, children = [] } = {}) {
@@ -126,6 +208,223 @@
 
             observer.observe(document.body, { childList: true, subtree: true });
         });
+    }
+
+    const isScenarioDetailContext = () => window.location.href.includes('/processes/runtime/');
+
+    function collectScenarioDetailMsgIds({ closeAfterExtraction = false } = {}) {
+        if (!isScenarioDetailContext()) {
+            return [];
+        }
+
+        const rows = Array.from(document.querySelectorAll(CONFIG.selectors.scenarioDetailKeyCell))
+            .filter((cell) => MSGID_LABELS.includes(cell.textContent?.trim()));
+
+        if (!rows.length) {
+            return [];
+        }
+
+        const msgIds = rows
+            .map((cell) => cell.parentElement?.querySelector(CONFIG.selectors.scenarioDetailValueCell)?.textContent?.trim())
+            .filter(Boolean);
+
+        if (msgIds.length && closeAfterExtraction) {
+            const closeButton = document.querySelector(CONFIG.selectors.scenarioDetailCloseButton);
+            if (closeButton) {
+                dispatchMouseClick(closeButton);
+            }
+        }
+
+        return msgIds;
+    }
+
+    async function readMsgIdsFromClipboard() {
+        try {
+            const clipboardText = await navigator.clipboard.readText();
+            if (!clipboardText) {
+                return [];
+            }
+            return clipboardText
+                .split(/[\s,;]+/)
+                .map((value) => value.trim())
+                .filter(Boolean);
+        } catch (error) {
+            console.warn('Unable to read MSGID from clipboard', error);
+            return [];
+        }
+    }
+
+    // Resolves MSGID candidates by checking the selection, the scenario detail dialog, and finally the clipboard.
+    async function resolveMsgIds({ includeClipboard = true, closeScenarioDetail = false } = {}) {
+        const selectedMsgIds = collectSelectedMsgIds();
+        if (selectedMsgIds.length) {
+            return { msgIds: selectedMsgIds, source: 'selection' };
+        }
+
+        const detailMsgIds = collectScenarioDetailMsgIds({ closeAfterExtraction: closeScenarioDetail });
+        if (detailMsgIds.length) {
+            return { msgIds: detailMsgIds, source: 'scenarioDetail' };
+        }
+
+        if (includeClipboard) {
+            const clipboardMsgIds = await readMsgIdsFromClipboard();
+            if (clipboardMsgIds.length) {
+                return { msgIds: clipboardMsgIds, source: 'clipboard' };
+            }
+        }
+
+        return { msgIds: [], source: null };
+    }
+
+    const normalizeText = (value) => value?.toLowerCase().trim() ?? '';
+
+    const isBusinessViewTabSelected = () => {
+        const labelElement = document.querySelector(CONFIG.selectors.selectedTabLabel);
+        if (!labelElement) {
+            return false;
+        }
+        const text = normalizeText(labelElement.textContent);
+        return BUSINESS_VIEW_LABELS.some((label) => text.includes(label));
+    };
+
+    async function ensureBusinessViewTabSelected() {
+        if (isBusinessViewTabSelected()) {
+            return true;
+        }
+
+        const candidate = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewTabItems))
+            .find((item) => {
+                const label = item.querySelector(CONFIG.selectors.businessViewTabLabel);
+                return label && BUSINESS_VIEW_LABELS.some((value) => normalizeText(label.textContent).includes(value));
+            });
+
+        if (!candidate) {
+            return false;
+        }
+
+        dispatchMouseClick(candidate);
+        await delay(150);
+        return isBusinessViewTabSelected();
+    }
+
+    const getBusinessViewTextBoxes = () => Array.from(document.querySelectorAll(CONFIG.selectors.businessViewTextBoxes));
+
+    function selectBusinessViewOption(possibleLabels) {
+        const options = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewListRows));
+        const normalizedTargets = possibleLabels.map((label) => label.toLowerCase());
+        const match = options.find((option) => normalizedTargets.includes(normalizeText(option.textContent)));
+        if (!match) {
+            return false;
+        }
+        dispatchMouseClick(match);
+        return true;
+    }
+
+    function selectFirstAvailableBusinessOption() {
+        const firstOption = document.querySelector(CONFIG.selectors.businessViewListRows);
+        if (!firstOption) {
+            return false;
+        }
+        dispatchMouseClick(firstOption);
+        return true;
+    }
+
+    // Ensures the Business view has MSGID selectors prepared so the automatic search can run.
+    async function ensureBusinessViewKeySelectors() {
+        const removeButton = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
+        if (!removeButton) {
+            const addButton = document.querySelector(CONFIG.selectors.businessViewAddButton);
+            if (addButton) {
+                dispatchMouseClick(addButton);
+                await delay(100);
+            }
+        }
+
+        const textBoxes = getBusinessViewTextBoxes();
+        const pendingBoxes = textBoxes.filter((element) => {
+            const text = normalizeText(element.textContent);
+            return BUSINESS_KEY_PLACEHOLDERS.some((placeholder) => text.includes(placeholder));
+        });
+
+        let allConfigured = true;
+        for (let index = 0; index < pendingBoxes.length; index += 1) {
+            const element = pendingBoxes[index];
+            dispatchMouseClick(element);
+            await delay(100);
+
+            const targetLabel = index === 1 ? 'MSGID' : '_MSGID';
+            if (selectBusinessViewOption([targetLabel])) {
+                continue;
+            }
+
+            const fallbackRemoved = index === 1 && selectBusinessViewOption(MSGID_LABELS);
+            if (fallbackRemoved) {
+                continue;
+            }
+
+            const remove = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
+            if (remove) {
+                dispatchMouseClick(remove);
+            } else {
+                selectFirstAvailableBusinessOption();
+            }
+            allConfigured = false;
+        }
+
+        return allConfigured;
+    }
+
+    async function ensureBusinessViewConnectorIsOr() {
+        const connector = getBusinessViewTextBoxes().find((element) => {
+            const text = normalizeText(element.textContent);
+            return CONNECTOR_AND_LABELS.includes(text);
+        });
+
+        if (!connector) {
+            return;
+        }
+
+        dispatchMouseClick(connector);
+        await delay(100);
+        if (!selectBusinessViewOption(CONNECTOR_OR_LABELS)) {
+            selectFirstAvailableBusinessOption();
+        }
+    }
+
+    function fillBusinessViewInputs(value) {
+        const inputs = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewInputs));
+        if (!inputs.length) {
+            return false;
+        }
+
+        inputs.forEach((input) => {
+            input.focus();
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        return true;
+    }
+
+    function triggerBusinessViewSearch() {
+        const button = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewSearchButtons))
+            .find((element) => {
+                const text = normalizeText(element.textContent);
+                return text === 'search' || text === 'suchen';
+            });
+
+        if (!button) {
+            return false;
+        }
+
+        const host = button.closest('table.mButton');
+        if (!host) {
+            return false;
+        }
+
+        dispatchMouseClick(host);
+        return true;
     }
 
     function createToastService() {
@@ -496,7 +795,7 @@
             return false;
         }
         const text = labelElement.textContent.toLowerCase();
-        return text.includes('details') || text.includes('business view');
+        return text.includes('details') || BUSINESS_VIEW_LABELS.some((label) => text.includes(label));
     }
 
     const parseSubflRow = (row) => {
@@ -551,7 +850,15 @@
             .filter(Boolean);
     }
 
-    const hasSelectedMsgIds = () => collectSelectedMsgIds().length > 0;
+    const hasMsgIdSource = () => {
+        if (collectSelectedMsgIds().length > 0) {
+            return true;
+        }
+        if (collectScenarioDetailMsgIds().length > 0) {
+            return true;
+        }
+        return typeof navigator !== 'undefined' && Boolean(navigator.clipboard);
+    };
 
     function normalizeList(value) {
         if (Array.isArray(value)) {
@@ -734,16 +1041,23 @@
     }
 
     async function copySelectedMsgIds() {
-        const msgIds = collectSelectedMsgIds();
-        if (!msgIds.length) {
-            showToast('No MSGIDs selected. Hover or select rows first.', { type: 'warning' });
-            return;
-        }
-
         try {
+            const { msgIds, source } = await resolveMsgIds({ includeClipboard: true, closeScenarioDetail: true });
+            if (!msgIds.length) {
+                showToast('No MSGID available. Select a row, open the scenario detail, or copy an MSGID first.', { type: 'warning' });
+                return;
+            }
+
             await navigator.clipboard.writeText(msgIds.join(', '));
+
             const label = pluralize('MSGID', msgIds.length);
-            showToast(`Copied ${msgIds.length} ${label} to the clipboard.`, { type: 'success' });
+            if (source === 'clipboard') {
+                showToast(`Clipboard already contained ${msgIds.length} ${label}.`, { type: 'info' });
+                return;
+            }
+
+            const sourceLabel = source ? MSGID_SOURCE_LABELS[source] : 'current context';
+            showToast(`Copied ${msgIds.length} ${label} from the ${sourceLabel} to the clipboard.`, { type: 'success' });
         } catch (error) {
             console.error('Failed to copy MSGIDs', error);
             showToast('Failed to copy MSGIDs. Check console for details.', { type: 'error' });
@@ -767,10 +1081,16 @@
                 addButton(host, { label: 'Copy Startup BuKeys', icon: '🔑', onClick: copyBuKeys }),
                 addButton(host, { label: 'Copy Startup for Elastic', icon: '🧭', onClick: copyElastic }),
                 addButton(host, {
-                    label: 'Copy Selected MSGIDs',
+                    label: 'Copy MSGIDs',
                     icon: '📋',
                     onClick: copySelectedMsgIds,
-                    isActionAvailable: hasSelectedMsgIds
+                    isActionAvailable: hasMsgIdSource
+                }),
+                addButton(host, {
+                    label: 'Search MSGID in Business view',
+                    icon: '🔎',
+                    onClick: searchMsgIdInBusinessView,
+                    isActionAvailable: hasMsgIdSource
                 })
             ].filter(Boolean);
 
