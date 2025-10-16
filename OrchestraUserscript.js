@@ -59,6 +59,17 @@
     let helperPanel = null;
     let helperPanelCollapsed = false;
 
+    let toastContainer = null;
+
+    const TOAST_THEMES = {
+        info: "#1976d2",
+        success: "#2e7d32",
+        warning: "#ed6c02",
+        error: "#d32f2f"
+    };
+
+    const DEFAULT_TOAST_DURATION_MS = 3500;
+
     /**
      * Ensures the helper panel exists and returns its container elements.
      */
@@ -129,6 +140,67 @@
 
         applyCollapsedState();
         return helperPanel;
+    }
+
+    /**
+     * Renders a temporary toast message so users get quick feedback from helper actions.
+     */
+    function showToast(message, options = {}) {
+        const { type = "info", durationMs = DEFAULT_TOAST_DURATION_MS } = options;
+        if (!toastContainer) {
+            toastContainer = document.createElement("div");
+            Object.assign(toastContainer.style, {
+                position: "fixed",
+                top: "16px",
+                right: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                zIndex: "10000",
+                fontFamily: "inherit",
+                fontSize: "12px"
+            });
+            document.body.appendChild(toastContainer);
+        }
+
+        const toast = document.createElement("div");
+        const background = TOAST_THEMES[type] || "#333";
+        Object.assign(toast.style, {
+            background,
+            color: "#fff",
+            padding: "8px 12px",
+            borderRadius: "4px",
+            boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
+            opacity: "0",
+            transform: "translateY(-10px)",
+            transition: "opacity 0.2s ease, transform 0.2s ease"
+        });
+        toast.textContent = message;
+        toast.setAttribute("role", "status");
+        toast.setAttribute("aria-live", "polite");
+
+        toastContainer.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.style.opacity = "1";
+            toast.style.transform = "translateY(0)";
+        });
+
+        const safeDuration = Math.max(1000, durationMs);
+
+        const teardown = () => {
+            toast.remove();
+            if (toastContainer && toastContainer.childElementCount === 0) {
+                toastContainer.remove();
+                toastContainer = null;
+            }
+        };
+
+        setTimeout(() => {
+            toast.style.opacity = "0";
+            toast.style.transform = "translateY(-10px)";
+            toast.addEventListener("transitionend", teardown, { once: true });
+        }, safeDuration);
     }
 
     /**
@@ -247,14 +319,47 @@
 
     async function copyBuKeys()
     {
-        let buKeys = await getBuKeysArray();
-        await navigator.clipboard.writeText(buKeys);
+        try {
+            const buKeys = await getBuKeysArray();
+            const normalizedKeys = Array.isArray(buKeys)
+                ? buKeys.filter(Boolean)
+                : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);
+
+            if (!normalizedKeys.length) {
+                showToast("No BuKeys found for the current rows.", { type: "warning" });
+                return;
+            }
+
+            await navigator.clipboard.writeText(normalizedKeys.join(","));
+            const label = normalizedKeys.length === 1 ? "BuKey" : "BuKeys";
+            showToast("Copied " + normalizedKeys.length + " " + label + " to the clipboard.", { type: "success" });
+        } catch (error) {
+            console.error("Failed to copy BuKeys", error);
+            showToast("Failed to copy BuKeys. Check console for details.", { type: "error" });
+        }
     }
 
     async function copyElastic()
     {
-        let buKeys = await getBuKeysArray();
-        await navigator.clipboard.writeText(buildElasticQuery(buKeys));
+        try {
+            const buKeys = await getBuKeysArray();
+            const normalizedKeys = Array.isArray(buKeys)
+                ? buKeys.filter(Boolean)
+                : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);
+
+            if (!normalizedKeys.length) {
+                showToast("No BuKeys available to build an Elastic query.", { type: "warning" });
+                return;
+            }
+
+            const query = buildElasticQuery(normalizedKeys);
+            await navigator.clipboard.writeText(query);
+            const label = normalizedKeys.length === 1 ? "BuKey" : "BuKeys";
+            showToast("Copied Elastic query for " + normalizedKeys.length + " " + label + ".", { type: "success" });
+        } catch (error) {
+            console.error("Failed to copy Elastic query", error);
+            showToast("Failed to copy the Elastic query. Check console for details.", { type: "error" });
+        }
     }
 
     /**
@@ -264,10 +369,20 @@
     {
         const msgIds = collectSelectedMsgIds();
         if (!msgIds.length) {
+            showToast("No MSGIDs selected. Hover or select rows first.", { type: "warning" });
             return;
         }
-        await navigator.clipboard.writeText(msgIds.join(", "));
+
+        try {
+            await navigator.clipboard.writeText(msgIds.join(", "));
+            const label = msgIds.length === 1 ? "MSGID" : "MSGIDs";
+            showToast("Copied " + msgIds.length + " " + label + " to the clipboard.", { type: "success" });
+        } catch (error) {
+            console.error("Failed to copy MSGIDs", error);
+            showToast("Failed to copy MSGIDs. Check console for details.", { type: "error" });
+        }
     }
+
 
     function addButton(parent, text, onClickHandler, options = {}) {
         const parentElement = typeof parent === "string" ? document.querySelector(parent) : parent;
@@ -277,16 +392,35 @@
         }
 
         const div = document.createElement("div");
-        div.textContent = text;
         div.setAttribute("role", "button");
         Object.assign(div.style, {
             background: ENABLED_BUTTON_COLOR,
             cursor: "pointer",
             border: "1px solid black",
             padding: "4px 6px",
-            textAlign: "center",
-            borderRadius: "2px"
+            textAlign: "left",
+            borderRadius: "2px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            justifyContent: "flex-start"
         });
+
+        if (options.icon) {
+            const iconSpan = document.createElement("span");
+            iconSpan.textContent = options.icon;
+            iconSpan.setAttribute("aria-hidden", "true");
+            Object.assign(iconSpan.style, {
+                width: "16px",
+                display: "inline-flex",
+                justifyContent: "center"
+            });
+            div.appendChild(iconSpan);
+        }
+
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = text;
+        div.appendChild(labelSpan);
 
         const controller = {
             element: div,
@@ -327,13 +461,14 @@
     }
 
 
+
     console.log("Orchestra Helper Functions loaded");
 
     waitForElm(BUTTON_PARENT_SELECTOR).then((parent) => {
         const buttons = [
-            addButton(document.body, "Get Startup BuKeys", copyBuKeys),
-            addButton(document.body, "Get Startup BuKeys (Elastic)", copyElastic),
-            addButton(document.body, "Copy Selected MSGIDs", copySelectedMsgIds, { isActionAvailable: hasSelectedMsgIds })
+            addButton(document.body, "Get Startup BuKeys", copyBuKeys, { icon: "🔑" }),
+            addButton(document.body, "Get Startup BuKeys (Elastic)", copyElastic, { icon: "🧭" }),
+            addButton(document.body, "Copy Selected MSGIDs", copySelectedMsgIds, { icon: "📋", isActionAvailable: hasSelectedMsgIds })
         ].filter(Boolean);
 
         if (!buttons.length) {
