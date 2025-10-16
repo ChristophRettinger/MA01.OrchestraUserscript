@@ -85,6 +85,11 @@
         scenarioDetail: 'scenario detail',
         clipboard: 'clipboard'
     };
+    const MSGID_CLIPBOARD_PATTERN = /^\d{22}$/;
+    const SEARCH_MSGID_LABELS = {
+        default: 'Search MSGID',
+        fromClipboard: 'Search MSGID (from clipboard)'
+    };
 
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -248,7 +253,7 @@
             return clipboardText
                 .split(/[\s,;]+/)
                 .map((value) => value.trim())
-                .filter(Boolean);
+                .filter((value) => MSGID_CLIPBOARD_PATTERN.test(value));
         } catch (error) {
             console.warn('Unable to read MSGID from clipboard', error);
             return [];
@@ -758,6 +763,11 @@
                         cursor: enabled ? 'pointer' : 'not-allowed',
                         opacity: enabled ? '1' : '0.5'
                     });
+                },
+                setLabel(value) {
+                    if (typeof value === 'string') {
+                        labelSpan.textContent = value;
+                    }
                 }
             };
 
@@ -1079,33 +1089,68 @@
     function initializeHelperPanel() {
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
             const host = document.body; // must be body due to iframe constraints
+            const copyStartupBuKeysButton = addButton(host, {
+                label: 'Copy Startup BuKeys',
+                icon: '🔑',
+                onClick: copyBuKeys
+            });
+            const copyElasticButton = addButton(host, {
+                label: 'Copy Startup for Elastic',
+                icon: '🧭',
+                onClick: copyElastic
+            });
+            const copyMsgIdsButton = addButton(host, {
+                label: 'Copy MSGIDs',
+                icon: '📋',
+                onClick: copySelectedMsgIds,
+                isActionAvailable: hasMsgIdSource
+            });
+            const searchMsgIdButton = addButton(host, {
+                label: SEARCH_MSGID_LABELS.default,
+                icon: '🔎',
+                onClick: searchMsgIdInBusinessView,
+                isActionAvailable: hasMsgIdSource
+            });
+
             const buttons = [
-                addButton(host, { label: 'Copy Startup BuKeys', icon: '🔑', onClick: copyBuKeys }),
-                addButton(host, { label: 'Copy Startup for Elastic', icon: '🧭', onClick: copyElastic }),
-                addButton(host, {
-                    label: 'Copy MSGIDs',
-                    icon: '📋',
-                    onClick: copySelectedMsgIds,
-                    isActionAvailable: hasMsgIdSource
-                }),
-                addButton(host, {
-                    label: 'Search MSGID',
-                    icon: '🔎',
-                    onClick: searchMsgIdInBusinessView,
-                    isActionAvailable: hasMsgIdSource
-                })
+                copyStartupBuKeysButton,
+                copyElasticButton,
+                copyMsgIdsButton,
+                searchMsgIdButton
             ].filter(Boolean);
 
             if (!buttons.length) {
                 return;
             }
 
-            const updateButtonState = () => {
+            // Reflect whether a valid clipboard MSGID is available directly in the button caption.
+            const updateSearchButtonLabel = async () => {
+                if (!searchMsgIdButton?.setLabel) {
+                    return;
+                }
+                if (!navigator?.clipboard?.readText) {
+                    searchMsgIdButton.setLabel(SEARCH_MSGID_LABELS.default);
+                    return;
+                }
+
+                try {
+                    const clipboardMsgIds = await readMsgIdsFromClipboard();
+                    const label = clipboardMsgIds.length
+                        ? SEARCH_MSGID_LABELS.fromClipboard
+                        : SEARCH_MSGID_LABELS.default;
+                    searchMsgIdButton.setLabel(label);
+                } catch (error) {
+                    searchMsgIdButton.setLabel(SEARCH_MSGID_LABELS.default);
+                }
+            };
+
+            const updateButtonState = async () => {
                 const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
                 buttons.forEach((button) => {
                     const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
                     button.setEnabled(baseEnabled && actionAvailable);
                 });
+                await updateSearchButtonLabel();
             };
 
             window.addEventListener('hashchange', updateButtonState);
