@@ -43,14 +43,110 @@
     const PROCESSES_HASH = "#scenario/.*/processes/";
     const ENABLED_BUTTON_COLOR = "#c99999";
     const DISABLED_BUTTON_COLOR = "#d6d6d6";
+    const BUTTON_PARENT_SELECTOR = ".header-holder";
+    const BUTTON_PANEL_WIDTH = 220;
+    const BUTTON_PANEL_HEADER_TEXT = "Helper Tools";
+    const MSG_ID_CELL_SELECTOR = ".mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell";
 
-    const isProcessOverviewContext = () => window.location.hash.match(PROCESS_OVERVIEW_HASH) !== null;
+    const isProcessOverviewContext = () => window.location.hash.includes(PROCESS_OVERVIEW_HASH);
     const isProcessesContext = () => window.location.hash.match(PROCESSES_HASH) !== null;
 
     /**
      * Returns true when the scenario chooser has at least one data row (excluding the header).
      */
     const hasReadableRows = () => document.querySelectorAll(ROW_SELECTOR).length > 0;
+
+    let helperPanel = null;
+    let helperPanelCollapsed = false;
+
+    /**
+     * Ensures the helper panel exists and returns its container elements.
+     */
+    function ensureHelperPanel(parent) {
+        if (helperPanel) {
+            return helperPanel;
+        }
+
+        if (!parent) {
+            return null;
+        }
+
+        const wrapper = document.createElement("div");
+        Object.assign(wrapper.style, {
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            width: BUTTON_PANEL_WIDTH + "px",
+            background: "#f5f5f5",
+            border: "1px solid black",
+            padding: "6px",
+            zIndex: "9999",
+            fontFamily: "inherit",
+            fontSize: "12px"
+        });
+
+        const toggleButton = document.createElement("button");
+        toggleButton.type = "button";
+        Object.assign(toggleButton.style, {
+            width: "100%",
+            background: "#bdbdbd",
+            border: "1px solid black",
+            cursor: "pointer",
+            padding: "2px 4px",
+            fontWeight: "bold"
+        });
+
+        const content = document.createElement("div");
+        content.setAttribute("role", "group");
+        Object.assign(content.style, {
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            marginTop: "6px"
+        });
+
+        const applyCollapsedState = () => {
+            toggleButton.textContent = (helperPanelCollapsed ? "[+] " : "[-] ") + BUTTON_PANEL_HEADER_TEXT;
+            toggleButton.setAttribute("aria-expanded", (!helperPanelCollapsed).toString());
+            content.style.display = helperPanelCollapsed ? "none" : "flex";
+        };
+
+        toggleButton.addEventListener("click", () => {
+            helperPanelCollapsed = !helperPanelCollapsed;
+            applyCollapsedState();
+        });
+
+        wrapper.appendChild(toggleButton);
+        wrapper.appendChild(content);
+        parent.appendChild(wrapper);
+
+        helperPanel = {
+            wrapper,
+            container: content,
+            toggleButton,
+            applyCollapsedState
+        };
+
+        applyCollapsedState();
+        return helperPanel;
+    }
+
+    /**
+     * Collects MSGIDs from hovered or selected rows.
+     */
+    function collectSelectedMsgIds() {
+        return Array.from(document.querySelectorAll(MSG_ID_CELL_SELECTOR))
+            .map((cell) => {
+                const matches = Array.from(cell.innerText.matchAll(/_MSGID:\s*([^,]*)/g));
+                if (!matches.length) {
+                    return null;
+                }
+                return matches.map((match) => match[1].trim()).join("");
+            })
+            .filter(Boolean);
+    }
+
+    const hasSelectedMsgIds = () => collectSelectedMsgIds().length > 0;
 
     /**
      * Build Elastic query string for given HCM→HL7(v3) SUBFL rows.
@@ -161,35 +257,36 @@
         await navigator.clipboard.writeText(buildElasticQuery(buKeys));
     }
 
-    function addButton(parentSelector, top, text, onClickHandler) {
-        const parent = document.querySelector(parentSelector);
-        if (!parent) return null;
+    /**
+     * Copies MSGIDs from hovered or selected rows into the clipboard.
+     */
+    async function copySelectedMsgIds()
+    {
+        const msgIds = collectSelectedMsgIds();
+        if (!msgIds.length) {
+            return;
+        }
+        await navigator.clipboard.writeText(msgIds.join(", "));
+    }
+
+    function addButton(parent, text, onClickHandler, options = {}) {
+        const parentElement = typeof parent === "string" ? document.querySelector(parent) : parent;
+        const panel = ensureHelperPanel(parentElement);
+        if (!panel) {
+            return null;
+        }
 
         const div = document.createElement("div");
         div.textContent = text;
         div.setAttribute("role", "button");
         Object.assign(div.style, {
-            position: "absolute",
-            top: top + "px",
-            right: "10px",
-            width: "180px",
             background: ENABLED_BUTTON_COLOR,
             cursor: "pointer",
             border: "1px solid black",
-            padding: "0px 5px"
+            padding: "4px 6px",
+            textAlign: "center",
+            borderRadius: "2px"
         });
-
-        const handleClick = (event) => {
-            if (div.dataset.enabled !== "true") {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-            onClickHandler(event);
-        };
-
-        div.addEventListener("click", handleClick);
-        parent.appendChild(div);
 
         const controller = {
             element: div,
@@ -202,19 +299,41 @@
                 div.style.pointerEvents = value ? "auto" : "none";
                 div.setAttribute("aria-disabled", value ? "false" : "true");
                 div.tabIndex = value ? 0 : -1;
-            }
+            },
+            isActionAvailable: typeof options.isActionAvailable === "function" ? options.isActionAvailable : null
         };
+
+        const handleClick = (event) => {
+            const actionAvailable = controller.isActionAvailable ? controller.isActionAvailable() : true;
+            if (div.dataset.enabled !== "true" || !actionAvailable) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+            onClickHandler(event);
+        };
+
+        div.addEventListener("click", handleClick);
+        div.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleClick(event);
+            }
+        });
+        panel.container.appendChild(div);
 
         controller.setEnabled(false);
         return controller;
     }
 
+
     console.log("Orchestra Helper Functions loaded");
 
-    waitForElm(".header-holder").then(() => {
+    waitForElm(BUTTON_PARENT_SELECTOR).then((parent) => {
         const buttons = [
-            addButton(".header-holder", 2, "Get Startup BuKeys", copyBuKeys),
-            addButton(".header-holder", 20, "Get Startup BuKeys (Elastic)", copyElastic)
+            addButton(document.body, "Get Startup BuKeys", copyBuKeys),
+            addButton(document.body, "Get Startup BuKeys (Elastic)", copyElastic),
+            addButton(document.body, "Copy Selected MSGIDs", copySelectedMsgIds, { isActionAvailable: hasSelectedMsgIds })
         ].filter(Boolean);
 
         if (!buttons.length) {
@@ -226,15 +345,20 @@
          * Buttons only make sense on the process overview page when rows are present.
          */
         const updateButtonState = () => {
-            console.log("Check button state: " +  isProcessesContext() + " " + hasReadableRows());
-            const enabled = isProcessesContext() && hasReadableRows();
-            buttons.forEach((button) => button.setEnabled(enabled));
+            //console.log("Check " + isProcessesContext()+ " " + hasReadableRows());
+            const baseEnabled = isProcessesContext() && hasReadableRows();
+            buttons.forEach((button) => {
+                //console.log("  Checkbutton " + (button.isActionAvailable ? button.isActionAvailable() : true));
+                const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
+                button.setEnabled(baseEnabled && actionAvailable);
+            });
         };
 
         window.addEventListener("hashchange", updateButtonState);
+        document.addEventListener("visibilitychange", updateButtonState);
 
         const domObserver = new MutationObserver(updateButtonState);
-        domObserver.observe(document.body, { childList: true, subtree: true });
+        domObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 
         updateButtonState();
     });

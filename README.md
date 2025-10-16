@@ -2,8 +2,6 @@
 
 The Userscript provides functionalities for the Orchestra Monitor website. It can be loaded e.g. using Tampermonkey.
 
-Buttons are only clickable if the function makes sense.
-
 ## Functions
 
 * Get Startup BuKeys:
@@ -11,3 +9,14 @@ Buttons are only clickable if the function makes sense.
 
 * Get Startup BuKeys (Elastic)
   Opens up the startup information from all processes on current page and extracts the BuKeys string. The result is convertet to an Elastic query to find the origin processes.
+
+* Copy Selected MSGIDs
+  Copies the `_MSGID` values from hovered or selected rows directly into the clipboard. Only available when at least one value is present.
+
+## Availability
+
+The helper buttons become active only on the process overview page (`#scenario/processOverview/`) and when at least one process row is available. In all other cases the buttons stay greyed out to prevent running the helpers without data. The MSGID helper needs at least one `_MSGID` value in the hovered or selected rows before it enables.
+
+## Helper Panel
+
+The buttons are grouped inside a collapsible panel pinned to the top right of the header. Use the [+]/[-] toggle to expand or collapse the tools without losing access to the page content.
