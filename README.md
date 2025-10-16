@@ -28,7 +28,7 @@ The helper buttons become active only on the process overview page (`#scenario/p
 
 ## Helper Panel
 
-The buttons are grouped inside a collapsible panel pinned to the top right of the header. The panel now starts collapsed so the "Orchestra Tools" controls stay out of the way by default. When collapsed the toggle button shows a circular icon with a white background and black border to keep it visible against the page chrome. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance.
+The buttons are grouped inside a collapsible panel pinned to the top right of the header. The panel now starts collapsed so the "Orchestra Tools" controls stay out of the way by default. When collapsed the toggle button shows a circular icon with a white background and black border to keep it visible against the page chrome. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
 
 ## Development Notes
 
