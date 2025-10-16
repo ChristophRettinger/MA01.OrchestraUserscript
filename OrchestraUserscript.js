@@ -12,12 +12,86 @@
 (function() {
     'use strict';
 
-    let delayMs = 500;
+    const CONFIG = {
+        selectors: {
+            buttonParent: '.header-holder',
+            rows: '.scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)',
+            msgIdCells: '.mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell',
+            processNameCell: 'td:nth-child(6)',
+            contextMenuItems: '.contextMenuPopup td.menuItem',
+            popup: '.gwt-DecoratedPopupPanel',
+            popupKeyCell: '.gwt-TabPanelBottom td.dialogTable-key',
+            popupCancelCell: '.mButtonBar td.middleCenter',
+            selectedTabLabel: '.mTabCaption-selected .mTabCaption-label'
+        },
+        routes: {
+            processOverviewHash: '#scenario/processOverview/',
+            processesHash: /#scenario\/.*\/processes\//
+        },
+        panel: {
+            width: 200,
+            headerText: 'Orchestra Tools',
+            collapsedIcon: '🛠',
+            collapsedSize: 26
+        },
+        colors: {
+            buttonEnabled: '#A9D0F5',
+            buttonDisabled: '#d6d6d6'
+        },
+        toast: {
+            defaultDurationMs: 3500,
+            themes: {
+                info: '#1976d2',
+                success: '#2e7d32',
+                warning: '#ed6c02',
+                error: '#d32f2f'
+            }
+        },
+        labels: {
+            changeVariables: 'Change variables',
+            cancel: 'Cancel',
+            buKeys: 'BuKeys'
+        },
+        elastic: {
+            defaultFields: ['_CASENO_ISH', 'SUBFL_category', 'SUBFL_changedate', '_PID_ISH', '_HCMMSGEVENT', '_UNIT'],
+            scenarioName: 'ITI_SUBFL_SAP_HCM_empfangen_129',
+            environment: 'production'
+        }
+    };
 
-    function waitForElm(selector) {
+    const state = {
+        helperPanel: null
+    };
+
+    function applyStyles(element, ...styles) {
+        styles.filter(Boolean).forEach((style) => Object.assign(element.style, style));
+    }
+
+    function createElement(tagName, { attributes = {}, textContent, children = [] } = {}) {
+        const element = document.createElement(tagName);
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+            element.setAttribute(key, value);
+        });
+        if (textContent !== undefined) {
+            element.textContent = textContent;
+        }
+        children.forEach((child) => {
+            if (child) {
+                element.appendChild(child);
+            }
+        });
+        return element;
+    }
+
+    function waitForElement(selector) {
         return new Promise((resolve) => {
-            if (document.querySelector(selector)) {
-                return resolve(document.querySelector(selector));
+            const existing = document.querySelector(selector);
+            if (existing) {
+                resolve(existing);
+                return;
             }
 
             const observer = new MutationObserver(() => {
@@ -28,16 +102,14 @@
                 }
             });
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
+            if (document.body) {
+                observer.observe(document.body, { childList: true, subtree: true });
+            } else {
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+            }
         });
     }
 
-    /**
-     * Resolves once the provided element has been removed from the DOM.
-     */
     function waitForElementRemoval(element) {
         return new Promise((resolve) => {
             if (!element || !element.isConnected) {
@@ -52,412 +124,516 @@
                 }
             });
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
+            observer.observe(document.body, { childList: true, subtree: true });
         });
     }
 
-    const delay = (durationMs) => {
-        return new Promise(resolve => setTimeout(resolve, durationMs));
+    function createToastService() {
+        const STYLES = {
+            container: {
+                position: 'fixed',
+                top: '16px',
+                right: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                zIndex: '10000',
+                fontFamily: 'inherit',
+                fontSize: '12px'
+            },
+            toast: {
+                color: '#fff',
+                padding: '8px 12px',
+                borderRadius: '4px',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                opacity: '0',
+                transform: 'translateY(-10px)',
+                transition: 'opacity 0.2s ease, transform 0.2s ease',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                minWidth: '220px'
+            },
+            message: {
+                display: 'block'
+            },
+            actionsWrapper: {
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '8px'
+            },
+            actionButton: {
+                background: 'rgba(255, 255, 255, 0.15)',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                borderRadius: '3px',
+                padding: '4px 8px',
+                cursor: 'pointer',
+                fontSize: '11px'
+            }
+        };
+
+        let container = null;
+
+        function ensureContainer() {
+            if (!container) {
+                container = createElement('div');
+                applyStyles(container, STYLES.container);
+                document.body.appendChild(container);
+            }
+            return container;
+        }
+
+        function cleanupContainer() {
+            if (container && container.childElementCount === 0) {
+                container.remove();
+                container = null;
+            }
+        }
+
+        function show(message, options = {}) {
+            const {
+                type = 'info',
+                durationMs = CONFIG.toast.defaultDurationMs,
+                persistent = false,
+                actions = []
+            } = options;
+
+            const host = ensureContainer();
+            const toast = createElement('div');
+            const background = CONFIG.toast.themes[type] || '#333';
+            applyStyles(toast, STYLES.toast, { background });
+
+            const messageSpan = createElement('span', { textContent: '', children: [] });
+            applyStyles(messageSpan, STYLES.message);
+
+            const setMessageContent = (content) => {
+                if (content instanceof Node) {
+                    messageSpan.replaceChildren(content);
+                } else {
+                    messageSpan.textContent = typeof content === 'string' ? content : String(content ?? '');
+                }
+            };
+
+            setMessageContent(message);
+            toast.appendChild(messageSpan);
+
+            if (Array.isArray(actions) && actions.length > 0) {
+                const actionsWrapper = createElement('div');
+                applyStyles(actionsWrapper, STYLES.actionsWrapper);
+
+                actions.forEach((action) => {
+                    if (!action || typeof action.label !== 'string') {
+                        return;
+                    }
+                    const actionButton = createElement('button', {
+                        attributes: { type: 'button' },
+                        textContent: action.label
+                    });
+                    if (action.ariaLabel) {
+                        actionButton.setAttribute('aria-label', action.ariaLabel);
+                    }
+                    applyStyles(actionButton, STYLES.actionButton);
+                    actionButton.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        if (typeof action.onClick === 'function') {
+                            action.onClick(event);
+                        }
+                    });
+                    actionsWrapper.appendChild(actionButton);
+                });
+
+                if (actionsWrapper.childElementCount > 0) {
+                    toast.appendChild(actionsWrapper);
+                }
+            }
+
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+
+            host.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            });
+
+            let timeoutId = null;
+            let dismissed = false;
+
+            const teardown = () => {
+                toast.remove();
+                cleanupContainer();
+            };
+
+            const startDismiss = () => {
+                if (dismissed) {
+                    return;
+                }
+                dismissed = true;
+                if (timeoutId !== null) {
+                    window.clearTimeout(timeoutId);
+                }
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                toast.addEventListener('transitionend', teardown, { once: true });
+            };
+
+            if (!persistent) {
+                const safeDuration = Math.max(1000, durationMs);
+                timeoutId = window.setTimeout(startDismiss, safeDuration);
+            }
+
+            return {
+                element: toast,
+                update(newMessage) {
+                    if (!dismissed) {
+                        setMessageContent(newMessage);
+                    }
+                },
+                dismiss() {
+                    startDismiss();
+                }
+            };
+        }
+
+        return { show };
     }
 
-    const ROW_SELECTOR = ".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)";
-    const PROCESS_OVERVIEW_HASH = "#scenario/processOverview/";
-    const PROCESSES_HASH = "#scenario/.*/processes/";
-    const ENABLED_BUTTON_COLOR = "#A9D0F5";
-    const DISABLED_BUTTON_COLOR = "#d6d6d6";
-    const BUTTON_PARENT_SELECTOR = ".header-holder";
-    const BUTTON_PANEL_WIDTH = 200;
-    const BUTTON_PANEL_HEADER_TEXT = "Orchestra Tools";
-    const BUTTON_PANEL_COLLAPSED_ICON = "🛠";
-    const BUTTON_PANEL_COLLAPSED_SIZE = 36;
-    const MSG_ID_CELL_SELECTOR = ".mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell";
+    const toastService = createToastService();
+    const showToast = (...args) => toastService.show(...args);
 
-    const isProcessOverviewContext = () => window.location.hash.includes(PROCESS_OVERVIEW_HASH);
-    const isProcessesContext = () => window.location.hash.match(PROCESSES_HASH) !== null;
+    class HelperPanel {
+        constructor(parent) {
+            this.parent = parent;
+            this.collapsed = true;
 
-    /**
-     * Returns true when the scenario chooser has at least one data row (excluding the header).
-     */
-    const hasReadableRows = () => document.querySelectorAll(ROW_SELECTOR).length > 0;
+            this.wrapper = createElement('div');
+            applyStyles(this.wrapper, {
+                position: 'absolute',
+                top: '5px',
+                right: '5px',
+                zIndex: '9999',
+                fontFamily: 'inherit',
+                fontSize: '12px'
+            });
 
-    /**
-     * Checks whether the currently selected tab exposes either the Details
-     * or Business view content which is required for the helpers to operate.
-     */
-    const isDetailsOrBusinessViewTab = () => {
-        const labelElement = document.querySelector(".mTabCaption-selected .mTabCaption-label");
-        if (!labelElement || typeof labelElement.textContent !== "string") {
+            this.toggleButton = createElement('button', {
+                attributes: { type: 'button' }
+            });
+            applyStyles(this.toggleButton, {
+                width: '100%',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                transition: 'background 0.2s ease'
+            });
+            this.toggleButton.addEventListener('click', () => {
+                this.collapsed = !this.collapsed;
+                this.applyState();
+            });
+
+            this.content = createElement('div', {
+                attributes: { role: 'group' }
+            });
+            applyStyles(this.content, {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                marginTop: '6px'
+            });
+
+            this.wrapper.appendChild(this.toggleButton);
+            this.wrapper.appendChild(this.content);
+            this.parent.appendChild(this.wrapper);
+
+            this.applyState();
+        }
+
+        applyState() {
+            const expanded = !this.collapsed;
+            const collapsedSizePx = `${CONFIG.panel.collapsedSize}px`;
+
+            this.toggleButton.setAttribute('aria-expanded', expanded.toString());
+            this.toggleButton.setAttribute(
+                'aria-label',
+                expanded ? `Collapse ${CONFIG.panel.headerText}` : `Expand ${CONFIG.panel.headerText}`
+            );
+            this.toggleButton.title = expanded ? `Collapse ${CONFIG.panel.headerText}` : `Expand ${CONFIG.panel.headerText}`;
+
+            this.content.style.display = expanded ? 'flex' : 'none';
+
+            if (expanded) {
+                applyStyles(this.wrapper, {
+                    width: `${CONFIG.panel.width}px`,
+                    background: '#f5f5f5',
+                    border: '1px solid black',
+                    padding: '6px',
+                    height: 'auto',
+                    borderRadius: '0',
+                    boxShadow: 'none'
+                });
+                applyStyles(this.toggleButton, {
+                    background: '#bdbdbd',
+                    border: '1px solid black',
+                    padding: '2px 4px',
+                    fontSize: '12px',
+                    display: 'block',
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '0',
+                    margin: '0'
+                });
+                this.toggleButton.textContent = `[-] ${CONFIG.panel.headerText}`;
+            } else {
+                applyStyles(this.wrapper, {
+                    width: collapsedSizePx,
+                    background: '#ffffff',
+                    border: '1px solid black',
+                    padding: '4px',
+                    height: collapsedSizePx,
+                    borderRadius: '3px',
+                    boxShadow: 'none'
+                });
+                applyStyles(this.toggleButton, {
+                    background: '#ffffff',
+                    border: 'none',
+                    padding: '0',
+                    margin: '-2px 0 0 0',
+                    fontSize: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%',
+                    height: '100%'
+                });
+                this.toggleButton.textContent = CONFIG.panel.collapsedIcon;
+            }
+        }
+
+        addButton({ label, icon, onClick, isActionAvailable }) {
+            if (typeof onClick !== 'function') {
+                throw new TypeError('onClick handler must be a function.');
+            }
+
+            const button = createElement('button', {
+                attributes: { type: 'button' }
+            });
+            applyStyles(button, {
+                border: '1px solid black',
+                padding: '4px 6px',
+                textAlign: 'left',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                justifyContent: 'flex-start',
+                fontFamily: 'inherit',
+                fontSize: '12px'
+            });
+
+            if (icon) {
+                const iconSpan = createElement('span', { textContent: icon });
+                iconSpan.setAttribute('aria-hidden', 'true');
+                applyStyles(iconSpan, {
+                    width: '16px',
+                    display: 'inline-flex',
+                    justifyContent: 'center'
+                });
+                button.appendChild(iconSpan);
+            }
+
+            const labelSpan = createElement('span', { textContent: label });
+            button.appendChild(labelSpan);
+
+            let enabled = false;
+            const controller = {
+                element: button,
+                isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
+                setEnabled(value) {
+                    enabled = Boolean(value);
+                    button.disabled = !enabled;
+                    applyStyles(button, {
+                        background: enabled ? CONFIG.colors.buttonEnabled : CONFIG.colors.buttonDisabled,
+                        cursor: enabled ? 'pointer' : 'not-allowed',
+                        opacity: enabled ? '1' : '0.5'
+                    });
+                }
+            };
+
+            const handleClick = (event) => {
+                const actionAvailable = controller.isActionAvailable ? controller.isActionAvailable() : true;
+                if (!enabled || !actionAvailable) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                onClick(event);
+            };
+
+            button.addEventListener('click', handleClick);
+            this.content.appendChild(button);
+
+            controller.setEnabled(false);
+            return controller;
+        }
+    }
+
+    function createHelperPanel(parent) {
+        if (state.helperPanel || !parent) {
+            return state.helperPanel;
+        }
+        state.helperPanel = new HelperPanel(parent);
+        return state.helperPanel;
+    }
+
+    const isProcessesContext = () => CONFIG.routes.processesHash.test(window.location.hash);
+
+    const hasReadableRows = () => document.querySelectorAll(CONFIG.selectors.rows).length > 0;
+
+    function isDetailsOrBusinessViewTab() {
+        const labelElement = document.querySelector(CONFIG.selectors.selectedTabLabel);
+        if (!labelElement || typeof labelElement.textContent !== 'string') {
             return false;
         }
         const text = labelElement.textContent.toLowerCase();
-        return text.includes("details") || text.includes("business view");
-    };
-
-    let helperPanel = null;
-    let helperPanelCollapsed = true;
-
-    let toastContainer = null;
-
-    const TOAST_THEMES = {
-        info: "#1976d2",
-        success: "#2e7d32",
-        warning: "#ed6c02",
-        error: "#d32f2f"
-    };
-
-    const DEFAULT_TOAST_DURATION_MS = 3500;
-
-    /**
-     * Ensures the helper panel exists and returns its container elements.
-     */
-    function ensureHelperPanel(parent) {
-        if (helperPanel) {
-            return helperPanel;
-        }
-
-        if (!parent) {
-            return null;
-        }
-
-        const wrapper = document.createElement("div");
-        Object.assign(wrapper.style, {
-            position: "absolute",
-            top: "5px",
-            right: "5px",
-            width: BUTTON_PANEL_WIDTH + "px",
-            background: "#f5f5f5",
-            border: "1px solid black",
-            padding: "6px",
-            zIndex: "9999",
-            fontFamily: "inherit",
-            fontSize: "12px"
-        });
-
-        const toggleButton = document.createElement("button");
-        toggleButton.type = "button";
-        Object.assign(toggleButton.style, {
-            width: "100%",
-            background: "#bdbdbd",
-            border: "1px solid black",
-            cursor: "pointer",
-            padding: "2px 4px",
-            fontWeight: "bold",
-            transition: "background 0.2s ease"
-        });
-
-        const content = document.createElement("div");
-        content.setAttribute("role", "group");
-        Object.assign(content.style, {
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-            marginTop: "6px"
-        });
-
-        const applyCollapsedState = () => {
-            const expanded = !helperPanelCollapsed;
-            toggleButton.setAttribute("aria-expanded", expanded.toString());
-            toggleButton.setAttribute(
-                "aria-label",
-                expanded ? `Collapse ${BUTTON_PANEL_HEADER_TEXT}` : `Expand ${BUTTON_PANEL_HEADER_TEXT}`
-            );
-            toggleButton.title = expanded ? `Collapse ${BUTTON_PANEL_HEADER_TEXT}` : `Expand ${BUTTON_PANEL_HEADER_TEXT}`;
-            content.style.display = expanded ? "flex" : "none";
-
-            if (expanded) {
-                wrapper.style.width = BUTTON_PANEL_WIDTH + "px";
-                wrapper.style.background = "#f5f5f5";
-                wrapper.style.border = "1px solid black";
-                wrapper.style.padding = "6px";
-                wrapper.style.height = "auto";
-                wrapper.style.borderRadius = "0";
-
-                toggleButton.textContent = "[-] " + BUTTON_PANEL_HEADER_TEXT;
-                toggleButton.style.background = "#bdbdbd";
-                toggleButton.style.border = "1px solid black";
-                toggleButton.style.padding = "2px 4px";
-                toggleButton.style.fontSize = "12px";
-                toggleButton.style.display = "block";
-                toggleButton.style.width = "100%";
-                toggleButton.style.height = "auto";
-                toggleButton.style.borderRadius = "0";
-                wrapper.style.boxShadow = "none";
-            } else {
-                const collapsedPadding = 4;
-                const collapsedDiameter = 26;
-                wrapper.style.width = collapsedDiameter + "px";
-                wrapper.style.background = "#ffffff";
-                wrapper.style.border = "1px solid black";
-                wrapper.style.padding = collapsedPadding + "px";
-                wrapper.style.height = collapsedDiameter + "px";
-                wrapper.style.borderRadius = "3px";
-
-                toggleButton.textContent = BUTTON_PANEL_COLLAPSED_ICON;
-                toggleButton.style.background = "#ffffff";
-                toggleButton.style.border = "none";
-                toggleButton.style.padding = "0";
-                toggleButton.style.margin = "-2px 0 0 0";
-                toggleButton.style.fontSize = "20px";
-                toggleButton.style.display = "flex";
-                toggleButton.style.alignItems = "center";
-                toggleButton.style.justifyContent = "center";
-
-            }
-        };
-
-        toggleButton.addEventListener("click", () => {
-            helperPanelCollapsed = !helperPanelCollapsed;
-            applyCollapsedState();
-        });
-
-        wrapper.appendChild(toggleButton);
-        wrapper.appendChild(content);
-        parent.appendChild(wrapper);
-
-        helperPanel = {
-            wrapper,
-            container: content,
-            toggleButton,
-            applyCollapsedState
-        };
-
-        applyCollapsedState();
-        return helperPanel;
+        return text.includes('details') || text.includes('business view');
     }
 
-    /**
-     * Renders a toast message so users get quick feedback from helper actions.
-     * Supports persistent toasts with inline action buttons and returns a controller
-     * that can update or dismiss the toast programmatically.
-     *
-     * @param {string|Node} message - Toast content. Strings become text nodes; DOM nodes are inserted directly.
-     * @param {{type?: string, durationMs?: number, persistent?: boolean, actions?: Array<{label: string, ariaLabel?: string, onClick?: (event: MouseEvent) => void}>}} options
-     * @returns {{update: (newMessage: string|Node) => void, dismiss: () => void, element: HTMLElement}}
-     */
-    function showToast(message, options = {}) {
-        const {
-            type = "info",
-            durationMs = DEFAULT_TOAST_DURATION_MS,
-            persistent = false,
-            actions = []
-        } = options;
-        if (!toastContainer) {
-            toastContainer = document.createElement("div");
-            Object.assign(toastContainer.style, {
-                position: "fixed",
-                top: "16px",
-                right: "16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                zIndex: "10000",
-                fontFamily: "inherit",
-                fontSize: "12px"
-            });
-            document.body.appendChild(toastContainer);
-        }
-
-        const toast = document.createElement("div");
-        const background = TOAST_THEMES[type] || "#333";
-        Object.assign(toast.style, {
-            background,
-            color: "#fff",
-            padding: "8px 12px",
-            borderRadius: "4px",
-            boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
-            opacity: "0",
-            transform: "translateY(-10px)",
-            transition: "opacity 0.2s ease, transform 0.2s ease",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            minWidth: "220px"
-        });
-
-        const messageSpan = document.createElement("span");
-        messageSpan.style.display = "block";
-        const setMessageContent = (content) => {
-            if (content instanceof Node) {
-                messageSpan.replaceChildren(content);
-            } else {
-                messageSpan.replaceChildren();
-                messageSpan.textContent = typeof content === "string" ? content : String(content ?? "");
-            }
-        };
-        setMessageContent(message);
-        toast.appendChild(messageSpan);
-
-        if (Array.isArray(actions) && actions.length > 0) {
-            const actionsWrapper = document.createElement("div");
-            Object.assign(actionsWrapper.style, {
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "8px"
-            });
-
-            actions.forEach((action) => {
-                if (!action || typeof action.label !== "string") {
-                    return;
+    const parseSubflRow = (row) => {
+        return row.split('|').reduce((accumulator, part) => {
+            const separatorIndex = part.indexOf(':');
+            if (separatorIndex > -1) {
+                const key = part.slice(0, separatorIndex).trim();
+                const value = part.slice(separatorIndex + 1).trim();
+                if (key) {
+                    accumulator[key] = value;
                 }
-                const actionButton = document.createElement("button");
-                actionButton.type = "button";
-                actionButton.textContent = action.label;
-                if (action.ariaLabel) {
-                    actionButton.setAttribute("aria-label", action.ariaLabel);
-                }
-                Object.assign(actionButton.style, {
-                    background: "rgba(255, 255, 255, 0.15)",
-                    color: "#fff",
-                    border: "1px solid rgba(255, 255, 255, 0.4)",
-                    borderRadius: "3px",
-                    padding: "4px 8px",
-                    cursor: "pointer",
-                    fontSize: "11px"
-                });
-                actionButton.addEventListener("click", (event) => {
-                    event.preventDefault();
-                    if (typeof action.onClick === "function") {
-                        action.onClick(event);
-                    }
-                });
-                actionsWrapper.appendChild(actionButton);
-            });
-
-            if (actionsWrapper.childElementCount > 0) {
-                toast.appendChild(actionsWrapper);
             }
+            return accumulator;
+        }, Object.create(null));
+    };
+
+    function buildElasticQuery(rows, fields = CONFIG.elastic.defaultFields) {
+        const clauses = rows
+            .map(parseSubflRow)
+            .map((kv) => {
+                const parts = fields
+                    .map((field) => {
+                        const value = kv[field];
+                        if (!value) {
+                            return null;
+                        }
+                        const normalizedField = field === '_UNIT' ? '_INSTITUTION' : field;
+                        const normalizedValue = /:/.test(value) ? `"${value}"` : value;
+                        return `BK.${normalizedField}:${normalizedValue}`;
+                    })
+                    .filter(Boolean);
+                return parts.length > 0 ? `(${parts.join(' and ')})` : null;
+            })
+            .filter(Boolean);
+
+        const baseQuery = `ScenarioName:${CONFIG.elastic.scenarioName} and Environment:${CONFIG.elastic.environment}`;
+        if (clauses.length === 0) {
+            return baseQuery;
         }
-        toast.setAttribute("role", "status");
-        toast.setAttribute("aria-live", "polite");
-
-        toastContainer.appendChild(toast);
-
-        requestAnimationFrame(() => {
-            toast.style.opacity = "1";
-            toast.style.transform = "translateY(0)";
-        });
-
-        let timeoutId = null;
-        let dismissed = false;
-        const teardown = () => {
-            toast.remove();
-            if (toastContainer && toastContainer.childElementCount === 0) {
-                toastContainer.remove();
-                toastContainer = null;
-            }
-        };
-
-        const startDismiss = () => {
-            if (dismissed) {
-                return;
-            }
-            dismissed = true;
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
-            toast.style.opacity = "0";
-            toast.style.transform = "translateY(-10px)";
-            toast.addEventListener("transitionend", teardown, { once: true });
-        };
-
-        if (!persistent) {
-            const safeDuration = Math.max(1000, durationMs);
-            timeoutId = window.setTimeout(startDismiss, safeDuration);
-        }
-
-        const controller = {
-            element: toast,
-            update(newMessage) {
-                if (!dismissed) {
-                    setMessageContent(newMessage);
-                }
-            },
-            dismiss() {
-                startDismiss();
-            }
-        };
-
-        return controller;
+        return `${baseQuery} and ( ${clauses.join(' or ')} )`;
     }
 
-    /**
-     * Collects MSGIDs from hovered or selected rows.
-     */
     function collectSelectedMsgIds() {
-        return Array.from(document.querySelectorAll(MSG_ID_CELL_SELECTOR))
+        return Array.from(document.querySelectorAll(CONFIG.selectors.msgIdCells))
             .map((cell) => {
                 const matches = Array.from(cell.innerText.matchAll(/_MSGID:\s*([^,]*)/g));
                 if (!matches.length) {
                     return null;
                 }
-                return matches.map((match) => match[1].trim()).join("");
+                return matches.map((match) => match[1].trim()).join('');
             })
             .filter(Boolean);
     }
 
     const hasSelectedMsgIds = () => collectSelectedMsgIds().length > 0;
 
-    /**
-     * Build Elastic query string for given HCM→HL7(v3) SUBFL rows.
-     * BK prefix is fixed. You can specify which fields to use (default: _CASENO_ISH, SUBFL_category, SUBFL_changedate, _PID_ISH, _HCMMSGEVENT, _UNIT)
-     *   Special handling: _UNIT is translated to _INSTITUTION for elastic
-     *
-     * @param {string[]} rows - Array of pipe-delimited key:value strings.
-     * @param {string[]} fields - Field names to include in each OR clause.
-     * @returns {string} Elastic query string.
-     */
-    function buildElasticQuery(rows, fields = ["_CASENO_ISH", "SUBFL_category", "SUBFL_changedate", "_PID_ISH", "_HCMMSGEVENT", "_UNIT"]) {
-        // Parse one row like: "key1:val1|key2:val2|..."
-        const parseRow = (row) => {
-            const kv = Object.create(null);
-            row.split("|").forEach(part => {
-                const i = part.indexOf(":");
-                if (i > -1) {
-                    const key = part.slice(0, i).trim();
-                    const val = part.slice(i + 1).trim();
-                    kv[key] = val;
-                }
-            });
-            return kv;
-        };
-
-        // Build the OR-clauses
-        const clauses = rows.map(parseRow).map(kv => {
-            const parts = fields.map(f => {
-                const val = kv[f];
-                if (!val) return null;
-                // Quote timestamps (or anything with ':' to be safe)
-                const quoted = /:/.test(val) ? `"${val}"` : val;
-                return `BK.${(f === "_UNIT") ? "_INSTITUTION" : f}:${quoted}`;
-            }).filter(Boolean);
-
-            return parts.length > 0 ? `(${parts.join(" and ")})` : null;
-        }).filter(Boolean);
-
-        if (clauses.length === 0) {
-            return `ScenarioName:ITI_SUBFL_SAP_HCM_empfangen_129 and Environment:production`;
+    function normalizeList(value) {
+        if (Array.isArray(value)) {
+            return value.filter(Boolean);
         }
-
-        return `ScenarioName:ITI_SUBFL_SAP_HCM_empfangen_129 and Environment:production and ( ${clauses.join(" or ")} )`;
+        if (typeof value === 'string') {
+            return value.split(/\s*,\s*/).filter(Boolean);
+        }
+        return [];
     }
 
-    /**
-     * Collects BuKeys from the scenario table. Displays a cancellable progress toast
-     * so the user can stop the automation while it iterates over rows.
-     *
-     * @returns {Promise<string[]|null>} Array of BuKey strings or null when the user cancels the run.
-     */
+    async function openChangeVariablesPopup(row) {
+        const processNameCell = row.querySelector(CONFIG.selectors.processNameCell);
+        if (!processNameCell) {
+            return null;
+        }
+
+        const contextMenuEvent = new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            button: 2
+        });
+        processNameCell.dispatchEvent(contextMenuEvent);
+
+        const menuItem = Array.from(document.querySelectorAll(CONFIG.selectors.contextMenuItems))
+            .find((element) => element.textContent.includes(CONFIG.labels.changeVariables));
+        if (!menuItem) {
+            return null;
+        }
+
+        menuItem.click();
+        await waitForElement(CONFIG.selectors.popup);
+        return document.querySelector(CONFIG.selectors.popup);
+    }
+
+    function extractBuKeysFromPopup(popup) {
+        if (!popup) {
+            return null;
+        }
+        const buKeyCell = Array.from(popup.querySelectorAll(CONFIG.selectors.popupKeyCell))
+            .find((element) => element.textContent.includes(CONFIG.labels.buKeys));
+        if (!buKeyCell) {
+            return null;
+        }
+        const input = buKeyCell.nextElementSibling?.querySelector('input');
+        return input?.value?.trim() || null;
+    }
+
+    async function closePopup(popup) {
+        if (!popup) {
+            return;
+        }
+        const cancelButton = Array.from(popup.querySelectorAll(CONFIG.selectors.popupCancelCell))
+            .find((element) => element.textContent.includes(CONFIG.labels.cancel));
+        if (!cancelButton) {
+            return;
+        }
+        const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+        });
+        cancelButton.dispatchEvent(clickEvent);
+        await waitForElementRemoval(popup);
+    }
+
+    async function processRowForBuKeys(row) {
+        const popup = await openChangeVariablesPopup(row);
+        if (!popup) {
+            return null;
+        }
+        const value = extractBuKeysFromPopup(popup);
+        await closePopup(popup);
+        return value;
+    }
+
     async function getBuKeysArray() {
-
-        let bukeys = [];
-
-        const rows = Array.from(document.querySelectorAll(".scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)"));
+        const rows = Array.from(document.querySelectorAll(CONFIG.selectors.rows));
         const totalRows = rows.length;
         if (!totalRows) {
-            return bukeys;
+            return [];
         }
 
         let cancelled = false;
@@ -465,23 +641,24 @@
         let progressToast = null;
 
         const cancelAction = {
-            label: "Cancel",
-            ariaLabel: "Cancel BuKey processing",
+            label: 'Cancel',
+            ariaLabel: 'Cancel BuKey processing',
             onClick: () => {
                 cancelled = true;
                 if (progressToast) {
-                    progressToast.update("Cancelling…");
+                    progressToast.update('Cancelling…');
                     progressToast.dismiss();
                 }
             }
         };
 
         progressToast = showToast(`Processing row 1 of ${totalRows}…`, {
-            type: "info",
+            type: 'info',
             persistent: true,
             actions: [cancelAction]
         });
 
+        const buKeys = [];
         for (const [index, row] of rows.entries()) {
             if (cancelled) {
                 break;
@@ -492,56 +669,13 @@
                 progressToast.update(`Processing row ${processedCount} of ${totalRows}…`);
             }
 
-            const processNameCell = row.querySelector("td:nth-child(6)");
-            if (!processNameCell) {
-                continue;
+            const value = await processRowForBuKeys(row);
+            if (cancelled) {
+                break;
             }
-
-            // Open context menu
-            const evt = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, view: window, button: 2 });
-            processNameCell.dispatchEvent(evt);
-
-            const menuItem = Array.from(document.querySelectorAll(".contextMenuPopup td.menuItem"))
-                .find((el) => el.textContent.includes("Change variables"));
-
-            if (!menuItem) {
-                continue;
+            if (value) {
+                buKeys.push(value);
             }
-
-            menuItem.click();
-
-            await waitForElm(".gwt-DecoratedPopupPanel");
-
-            let popup = document.querySelector(".gwt-DecoratedPopupPanel");
-
-            // Look for BuKeys
-            const buKeyCell = Array.from(popup.querySelectorAll(".gwt-TabPanelBottom td.dialogTable-key"))
-                .find((el) => el.textContent.includes("BuKeys"));
-
-            if (buKeyCell) {
-                const input = buKeyCell.nextElementSibling?.querySelector("input");
-                const value = input?.value?.trim();
-                if (value) {
-                    // Gather keys
-                    bukeys.push(value);
-                }
-            }
-
-            const cancelButton = Array.from(popup.querySelectorAll(".mButtonBar td.middleCenter"))
-                .find((el) => el.textContent.includes("Cancel"));
-
-            if (!cancelButton) {
-                continue;
-            }
-
-            const clickEvent = new MouseEvent("click", {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            });
-            cancelButton.dispatchEvent(clickEvent);
-
-            await waitForElementRemoval(popup);
         }
 
         if (progressToast) {
@@ -549,197 +683,124 @@
         }
 
         if (cancelled) {
-            showToast(`Cancelled after processing ${processedCount} of ${totalRows} rows.`, { type: "warning" });
+            showToast(`Cancelled after processing ${processedCount} of ${totalRows} rows.`, { type: 'warning' });
             return null;
         }
 
-        return bukeys;
+        return buKeys;
     }
 
-    async function copyBuKeys()
-    {
+    const pluralize = (word, count) => (count === 1 ? word : `${word}s`);
+
+    async function copyBuKeys() {
         try {
             const buKeys = await getBuKeysArray();
             if (buKeys === null) {
                 return;
             }
-            const normalizedKeys = Array.isArray(buKeys)
-                ? buKeys.filter(Boolean)
-                : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);
-
+            const normalizedKeys = normalizeList(buKeys);
             if (!normalizedKeys.length) {
-                showToast("No BuKeys found for the current rows.", { type: "warning" });
+                showToast('No BuKeys found for the current rows.', { type: 'warning' });
                 return;
             }
-
-            await navigator.clipboard.writeText(normalizedKeys.join(","));
-            const label = normalizedKeys.length === 1 ? "BuKey" : "BuKeys";
-            showToast("Copied " + normalizedKeys.length + " " + label + " to the clipboard.", { type: "success" });
+            await navigator.clipboard.writeText(normalizedKeys.join(','));
+            const label = pluralize('BuKey', normalizedKeys.length);
+            showToast(`Copied ${normalizedKeys.length} ${label} to the clipboard.`, { type: 'success' });
         } catch (error) {
-            console.error("Failed to copy BuKeys", error);
-            showToast("Failed to copy BuKeys. Check console for details.", { type: "error" });
+            console.error('Failed to copy BuKeys', error);
+            showToast('Failed to copy BuKeys. Check console for details.', { type: 'error' });
         }
     }
 
-    async function copyElastic()
-    {
+    async function copyElastic() {
         try {
             const buKeys = await getBuKeysArray();
             if (buKeys === null) {
                 return;
             }
-            const normalizedKeys = Array.isArray(buKeys)
-                ? buKeys.filter(Boolean)
-                : (typeof buKeys === "string" ? buKeys.split(/\s*,\s*/).filter(Boolean) : []);
-
+            const normalizedKeys = normalizeList(buKeys);
             if (!normalizedKeys.length) {
-                showToast("No BuKeys available to build an Elastic query.", { type: "warning" });
+                showToast('No BuKeys available to build an Elastic query.', { type: 'warning' });
                 return;
             }
-
             const query = buildElasticQuery(normalizedKeys);
             await navigator.clipboard.writeText(query);
-            const label = normalizedKeys.length === 1 ? "BuKey" : "BuKeys";
-            showToast("Copied Elastic query for " + normalizedKeys.length + " " + label + ".", { type: "success" });
+            const label = pluralize('BuKey', normalizedKeys.length);
+            showToast(`Copied Elastic query for ${normalizedKeys.length} ${label}.`, { type: 'success' });
         } catch (error) {
-            console.error("Failed to copy Elastic query", error);
-            showToast("Failed to copy the Elastic query. Check console for details.", { type: "error" });
+            console.error('Failed to copy Elastic query', error);
+            showToast('Failed to copy the Elastic query. Check console for details.', { type: 'error' });
         }
     }
 
-    /**
-     * Copies MSGIDs from hovered or selected rows into the clipboard.
-     */
-    async function copySelectedMsgIds()
-    {
+    async function copySelectedMsgIds() {
         const msgIds = collectSelectedMsgIds();
         if (!msgIds.length) {
-            showToast("No MSGIDs selected. Hover or select rows first.", { type: "warning" });
+            showToast('No MSGIDs selected. Hover or select rows first.', { type: 'warning' });
             return;
         }
 
         try {
-            await navigator.clipboard.writeText(msgIds.join(", "));
-            const label = msgIds.length === 1 ? "MSGID" : "MSGIDs";
-            showToast("Copied " + msgIds.length + " " + label + " to the clipboard.", { type: "success" });
+            await navigator.clipboard.writeText(msgIds.join(', '));
+            const label = pluralize('MSGID', msgIds.length);
+            showToast(`Copied ${msgIds.length} ${label} to the clipboard.`, { type: 'success' });
         } catch (error) {
-            console.error("Failed to copy MSGIDs", error);
-            showToast("Failed to copy MSGIDs. Check console for details.", { type: "error" });
+            console.error('Failed to copy MSGIDs', error);
+            showToast('Failed to copy MSGIDs. Check console for details.', { type: 'error' });
         }
     }
 
-
-    function addButton(parent, text, onClickHandler, options = {}) {
-        const parentElement = typeof parent === "string" ? document.querySelector(parent) : parent;
-        const panel = ensureHelperPanel(parentElement);
+    function addButton(parent, config) {
+        const parentElement = typeof parent === 'string' ? document.querySelector(parent) : parent;
+        const host = parentElement || document.body;
+        const panel = createHelperPanel(host);
         if (!panel) {
             return null;
         }
-
-        const div = document.createElement("div");
-        div.setAttribute("role", "button");
-        Object.assign(div.style, {
-            background: ENABLED_BUTTON_COLOR,
-            cursor: "pointer",
-            border: "1px solid black",
-            padding: "4px 6px",
-            textAlign: "left",
-            borderRadius: "2px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            justifyContent: "flex-start"
-        });
-
-        if (options.icon) {
-            const iconSpan = document.createElement("span");
-            iconSpan.textContent = options.icon;
-            iconSpan.setAttribute("aria-hidden", "true");
-            Object.assign(iconSpan.style, {
-                width: "16px",
-                display: "inline-flex",
-                justifyContent: "center"
-            });
-            div.appendChild(iconSpan);
-        }
-
-        const labelSpan = document.createElement("span");
-        labelSpan.textContent = text;
-        div.appendChild(labelSpan);
-
-        const controller = {
-            element: div,
-            setEnabled(isEnabled) {
-                const value = Boolean(isEnabled);
-                div.dataset.enabled = value ? "true" : "false";
-                div.style.cursor = value ? "pointer" : "not-allowed";
-                div.style.opacity = value ? "1" : "0.5";
-                div.style.background = value ? ENABLED_BUTTON_COLOR : DISABLED_BUTTON_COLOR;
-                div.style.pointerEvents = value ? "auto" : "none";
-                div.setAttribute("aria-disabled", value ? "false" : "true");
-                div.tabIndex = value ? 0 : -1;
-            },
-            isActionAvailable: typeof options.isActionAvailable === "function" ? options.isActionAvailable : null
-        };
-
-        const handleClick = (event) => {
-            const actionAvailable = controller.isActionAvailable ? controller.isActionAvailable() : true;
-            if (div.dataset.enabled !== "true" || !actionAvailable) {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-            }
-            onClickHandler(event);
-        };
-
-        div.addEventListener("click", handleClick);
-        div.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleClick(event);
-            }
-        });
-        panel.container.appendChild(div);
-
-        controller.setEnabled(false);
-        return controller;
+        return panel.addButton(config);
     }
 
+    function initializeHelperPanel() {
+        waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
+            const host = parent || document.body;
+            const buttons = [
+                addButton(host, { label: 'Get Startup BuKeys', icon: '🔑', onClick: copyBuKeys }),
+                addButton(host, { label: 'Get Startup BuKeys (Elastic)', icon: '🧭', onClick: copyElastic }),
+                addButton(host, {
+                    label: 'Copy Selected MSGIDs',
+                    icon: '📋',
+                    onClick: copySelectedMsgIds,
+                    isActionAvailable: hasSelectedMsgIds
+                })
+            ].filter(Boolean);
 
+            if (!buttons.length) {
+                return;
+            }
 
-    console.log("Orchestra Helper Functions loaded");
+            const updateButtonState = () => {
+                const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
+                buttons.forEach((button) => {
+                    const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
+                    button.setEnabled(baseEnabled && actionAvailable);
+                });
+            };
 
-    waitForElm(BUTTON_PARENT_SELECTOR).then((parent) => {
-        const buttons = [
-            addButton(document.body, "Get Startup BuKeys", copyBuKeys, { icon: "🔑" }),
-            addButton(document.body, "Get Startup BuKeys (Elastic)", copyElastic, { icon: "🧭" }),
-            addButton(document.body, "Copy Selected MSGIDs", copySelectedMsgIds, { icon: "📋", isActionAvailable: hasSelectedMsgIds })
-        ].filter(Boolean);
+            window.addEventListener('hashchange', updateButtonState);
+            document.addEventListener('visibilitychange', updateButtonState);
 
-        if (!buttons.length) {
-            return;
-        }
-
-        /**
-         * Enable or disable helper buttons depending on the current page context.
-         * Buttons only make sense on the process overview page when rows are present.
-         */
-        const updateButtonState = () => {
-            //console.log("Check " + isProcessesContext()+ " " + hasReadableRows());
-            const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
-            buttons.forEach((button) => {
-                //console.log("  Checkbutton " + (button.isActionAvailable ? button.isActionAvailable() : true));
-                const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
-                button.setEnabled(baseEnabled && actionAvailable);
+            const domObserver = new MutationObserver(updateButtonState);
+            domObserver.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['class']
             });
-        };
 
-        window.addEventListener("hashchange", updateButtonState);
-        document.addEventListener("visibilitychange", updateButtonState);
+            updateButtonState();
+        });
+    }
 
-        const domObserver = new MutationObserver(updateButtonState);
-        domObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-
-        updateButtonState();
-    });
+    console.log('Orchestra Helper Functions loaded');
+    initializeHelperPanel();
 })();
