@@ -494,10 +494,12 @@
 
             menuItem.click();
 
-            await waitForElm(".gwt-TabPanelBottom td.dialogTable-key");
+            await waitForElm(".gwt-DecoratedPopupPanel");
+
+            let popup = document.querySelector(".gwt-DecoratedPopupPanel");
 
             // Look for BuKeys
-            const buKeyCell = Array.from(document.querySelectorAll(".gwt-TabPanelBottom td.dialogTable-key"))
+            const buKeyCell = Array.from(popup.querySelectorAll(".gwt-TabPanelBottom td.dialogTable-key"))
                 .find((el) => el.textContent.includes("BuKeys"));
 
             if (buKeyCell) {
@@ -509,7 +511,7 @@
                 }
             }
 
-            const cancelButton = Array.from(document.querySelectorAll(".mButtonBar td.middleCenter"))
+            const cancelButton = Array.from(popup.querySelectorAll(".mButtonBar td.middleCenter"))
                 .find((el) => el.textContent.includes("Cancel"));
 
             if (!cancelButton) {
@@ -523,7 +525,7 @@
             });
             cancelButton.dispatchEvent(clickEvent);
 
-            await waitForElementRemoval(cancelButton);
+            await waitForElementRemoval(popup);
         }
 
         if (progressToast) {
