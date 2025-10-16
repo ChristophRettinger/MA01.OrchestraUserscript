@@ -20,10 +20,35 @@
                 return resolve(document.querySelector(selector));
             }
 
-            const observer = new MutationObserver((mutations) => {
-                if (document.querySelector(selector)) {
+            const observer = new MutationObserver(() => {
+                const element = document.querySelector(selector);
+                if (element) {
                     observer.disconnect();
-                    resolve(document.querySelector(selector));
+                    resolve(element);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+        });
+    }
+
+    /**
+     * Resolves once the provided element has been removed from the DOM.
+     */
+    function waitForElementRemoval(element) {
+        return new Promise((resolve) => {
+            if (!element || !element.isConnected) {
+                resolve();
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                if (!element.isConnected) {
+                    observer.disconnect();
+                    resolve();
                 }
             });
 
@@ -273,36 +298,45 @@
 
         for (const row of rows) {
 
-            const processNameCell = row.querySelector("td:nth-child(6)")
+            const processNameCell = row.querySelector("td:nth-child(6)");
+            if (!processNameCell) {
+                continue;
+            }
 
             // Open context menu
-            let evt = new MouseEvent("contextmenu", {bubbles:true, conicelable:true, view:window, button:2})
-            processNameCell.dispatchEvent(evt)
+            const evt = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, view: window, button: 2 });
+            processNameCell.dispatchEvent(evt);
 
-            let menuItem = Array.prototype.slice.call(document.querySelectorAll(".contextMenuPopup td.menuItem"))
-            .filter(function (el) {
-                return el.textContent.includes('Change variables')
-            })[0];
+            const menuItem = Array.from(document.querySelectorAll(".contextMenuPopup td.menuItem"))
+                .find((el) => el.textContent.includes("Change variables"));
+
+            if (!menuItem) {
+                continue;
+            }
 
             menuItem.click();
 
-            await delay(delayMs);
+            await waitForElm(".gwt-TabPanelBottom td.dialogTable-key");
 
             // Look for BuKeys
-            let val = Array.prototype.slice.call(document.querySelectorAll(".gwt-TabPanelBottom td.dialogTable-key"))
-            .filter(function (el) {
-                return el.textContent.includes('BuKeys')
-            })[0].nextElementSibling.querySelector("input").value
+            const buKeyCell = Array.from(document.querySelectorAll(".gwt-TabPanelBottom td.dialogTable-key"))
+                .find((el) => el.textContent.includes("BuKeys"));
 
+            if (buKeyCell) {
+                const input = buKeyCell.nextElementSibling?.querySelector("input");
+                const value = input?.value?.trim();
+                if (value) {
+                    // Gather keys
+                    bukeys.push(value);
+                }
+            }
 
-            // Gather keys
-            bukeys.push(val);
+            const cancelButton = Array.from(document.querySelectorAll(".mButtonBar td.middleCenter"))
+                .find((el) => el.textContent.includes("Cancel"));
 
-            // Cancel Button
-            let cancelButton = Array.prototype.slice.call(document.querySelectorAll(".mButtonBar td.middleCenter"))
-            .filter(function (el) {
-                return el.textContent.includes('Cancel')
-            })[0];
+            if (!cancelButton) {
+                continue;
+            }
 
             const clickEvent = new MouseEvent("click", {
                 bubbles: true,
@@ -311,7 +345,7 @@
             });
             cancelButton.dispatchEvent(clickEvent);
 
-            await delay(delayMs);
+            await waitForElementRemoval(cancelButton);
         }
 
         return bukeys;
