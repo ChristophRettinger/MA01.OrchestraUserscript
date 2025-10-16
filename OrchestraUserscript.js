@@ -69,9 +69,9 @@
     const ENABLED_BUTTON_COLOR = "#A9D0F5";
     const DISABLED_BUTTON_COLOR = "#d6d6d6";
     const BUTTON_PARENT_SELECTOR = ".header-holder";
-    const BUTTON_PANEL_WIDTH = 220;
+    const BUTTON_PANEL_WIDTH = 200;
     const BUTTON_PANEL_HEADER_TEXT = "Orchestra Tools";
-    const BUTTON_PANEL_COLLAPSED_ICON = "🎛️";
+    const BUTTON_PANEL_COLLAPSED_ICON = "🛠";
     const BUTTON_PANEL_COLLAPSED_SIZE = 36;
     const MSG_ID_CELL_SELECTOR = ".mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell";
 
@@ -125,8 +125,8 @@
         const wrapper = document.createElement("div");
         Object.assign(wrapper.style, {
             position: "absolute",
-            top: "10px",
-            right: "10px",
+            top: "5px",
+            right: "5px",
             width: BUTTON_PANEL_WIDTH + "px",
             background: "#f5f5f5",
             border: "1px solid black",
@@ -187,25 +187,24 @@
                 wrapper.style.boxShadow = "none";
             } else {
                 const collapsedPadding = 4;
-                const collapsedDiameter = BUTTON_PANEL_COLLAPSED_SIZE + collapsedPadding * 2;
+                const collapsedDiameter = 26;
                 wrapper.style.width = collapsedDiameter + "px";
                 wrapper.style.background = "#ffffff";
                 wrapper.style.border = "1px solid black";
                 wrapper.style.padding = collapsedPadding + "px";
                 wrapper.style.height = collapsedDiameter + "px";
-                wrapper.style.borderRadius = collapsedDiameter / 2 + "px";
+                wrapper.style.borderRadius = "3px";
 
                 toggleButton.textContent = BUTTON_PANEL_COLLAPSED_ICON;
                 toggleButton.style.background = "#ffffff";
                 toggleButton.style.border = "none";
                 toggleButton.style.padding = "0";
+                toggleButton.style.margin = "-2px 0 0 0";
                 toggleButton.style.fontSize = "20px";
                 toggleButton.style.display = "flex";
                 toggleButton.style.alignItems = "center";
                 toggleButton.style.justifyContent = "center";
-                toggleButton.style.width = BUTTON_PANEL_COLLAPSED_SIZE + "px";
-                toggleButton.style.height = BUTTON_PANEL_COLLAPSED_SIZE + "px";
-                toggleButton.style.borderRadius = BUTTON_PANEL_COLLAPSED_SIZE / 2 + "px";
+
             }
         };
 
