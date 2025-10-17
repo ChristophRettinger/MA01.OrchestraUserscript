@@ -82,14 +82,9 @@
     const CONNECTOR_OR_LABELS = ['or', 'oder'];
     const MSGID_SOURCE_LABELS = {
         selection: 'selected rows',
-        scenarioDetail: 'scenario detail',
-        clipboard: 'clipboard'
+        scenarioDetail: 'scenario detail'
     };
-    const MSGID_CLIPBOARD_PATTERN = /^\d{22}$/;
-    const SEARCH_MSGID_LABELS = {
-        default: 'Search MSGID',
-        fromClipboard: 'Search MSGID (from clipboard)'
-    };
+    const SEARCH_MSGID_LABEL = 'Search MSGID';
 
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -111,9 +106,9 @@
     // Drives the Business view UI to search for the resolved MSGID automatically.
     async function searchMsgIdInBusinessView() {
         try {
-            const { msgIds, source } = await resolveMsgIds({ includeClipboard: true, closeScenarioDetail: true });
+            const msgIds = collectSelectedMsgIds();
             if (!msgIds.length) {
-                showToast('No MSGID available. Select a row, open the scenario detail, or copy an MSGID first.', { type: 'warning' });
+                showToast('Select at least one row before searching for an MSGID.', { type: 'warning' });
                 return;
             }
 
@@ -147,8 +142,7 @@
                 return;
             }
 
-            const sourceLabel = source ? MSGID_SOURCE_LABELS[source] : 'current context';
-            showToast(`Searching Business view for MSGID ${msgId} (${sourceLabel}).`, { type: 'success' });
+            showToast(`Searching Business view for MSGID ${msgId} (${MSGID_SOURCE_LABELS.selection}).`, { type: 'success' });
         } catch (error) {
             console.error('Failed to search MSGID in Business view', error);
             showToast('Failed to search the Business view. Check console for details.', { type: 'error' });
@@ -261,51 +255,8 @@
         return uniqueMsgIds;
     }
 
-    const clipboardState = {
-        isSupported: typeof navigator?.clipboard?.readText === 'function',
-        isBlocked: false,
-        hasLoggedError: false
-    };
-
-    function handleClipboardReadError(error) {
-        clipboardState.isBlocked = true;
-        if (!clipboardState.hasLoggedError) {
-            console.warn('Unable to read MSGID from clipboard', error);
-            clipboardState.hasLoggedError = true;
-        }
-    }
-
-    async function readMsgIdsFromClipboard({ ignoreBlocked = false } = {}) {
-        if (!clipboardState.isSupported) {
-            return [];
-        }
-
-        if (clipboardState.isBlocked && !ignoreBlocked) {
-            return [];
-        }
-
-        try {
-            const clipboardText = await navigator.clipboard.readText();
-            if (!clipboardText) {
-                clipboardState.isBlocked = false;
-                return [];
-            }
-
-            clipboardState.isBlocked = false;
-            return ensureUniqueValues(
-                clipboardText
-                    .split(/[\s,;]+/)
-                    .map((value) => value.trim())
-                    .filter((value) => MSGID_CLIPBOARD_PATTERN.test(value))
-            );
-        } catch (error) {
-            handleClipboardReadError(error);
-            return [];
-        }
-    }
-
-    // Resolves MSGID candidates by checking the selection, the scenario detail dialog, and finally the clipboard.
-    async function resolveMsgIds({ includeClipboard = true, closeScenarioDetail = false } = {}) {
+    // Resolves MSGID candidates by checking the selection and the scenario detail dialog.
+    async function resolveMsgIds({ closeScenarioDetail = false } = {}) {
         const selectedMsgIds = collectSelectedMsgIds();
         if (selectedMsgIds.length) {
             return { msgIds: selectedMsgIds, source: 'selection' };
@@ -314,13 +265,6 @@
         const detailMsgIds = collectScenarioDetailMsgIds({ closeAfterExtraction: closeScenarioDetail });
         if (detailMsgIds.length) {
             return { msgIds: detailMsgIds, source: 'scenarioDetail' };
-        }
-
-        if (includeClipboard) {
-            const clipboardMsgIds = await readMsgIdsFromClipboard({ ignoreBlocked: true });
-            if (clipboardMsgIds.length) {
-                return { msgIds: clipboardMsgIds, source: 'clipboard' };
-            }
         }
 
         return { msgIds: [], source: null };
@@ -914,10 +858,7 @@
         if (collectSelectedMsgIds().length > 0) {
             return true;
         }
-        if (collectScenarioDetailMsgIds().length > 0) {
-            return true;
-        }
-        return typeof navigator !== 'undefined' && Boolean(navigator.clipboard);
+        return collectScenarioDetailMsgIds().length > 0;
     };
 
     function normalizeList(value) {
@@ -1102,20 +1043,15 @@
 
     async function copySelectedMsgIds() {
         try {
-            const { msgIds, source } = await resolveMsgIds({ includeClipboard: true, closeScenarioDetail: true });
+            const { msgIds, source } = await resolveMsgIds({ closeScenarioDetail: true });
             if (!msgIds.length) {
-                showToast('No MSGID available. Select a row, open the scenario detail, or copy an MSGID first.', { type: 'warning' });
+                showToast('No MSGID available. Select a row or open the scenario detail first.', { type: 'warning' });
                 return;
             }
 
             await navigator.clipboard.writeText(msgIds.join(', '));
 
             const label = pluralize('MSGID', msgIds.length);
-            if (source === 'clipboard') {
-                showToast(`Clipboard already contained ${msgIds.length} ${label}.`, { type: 'info' });
-                return;
-            }
-
             const sourceLabel = source ? MSGID_SOURCE_LABELS[source] : 'current context';
             showToast(`Copied ${msgIds.length} ${label} from the ${sourceLabel} to the clipboard.`, { type: 'success' });
         } catch (error) {
@@ -1154,7 +1090,7 @@
                 isActionAvailable: hasMsgIdSource
             });
             const searchMsgIdButton = addButton(host, {
-                label: SEARCH_MSGID_LABELS.default,
+                label: SEARCH_MSGID_LABEL,
                 icon: '🔎',
                 onClick: searchMsgIdInBusinessView,
                 isActionAvailable: hasMsgIdSource
@@ -1171,34 +1107,12 @@
                 return;
             }
 
-            // Reflect whether a valid clipboard MSGID is available directly in the button caption.
-            const updateSearchButtonLabel = async () => {
-                if (!searchMsgIdButton?.setLabel) {
-                    return;
-                }
-                if (!navigator?.clipboard?.readText) {
-                    searchMsgIdButton.setLabel(SEARCH_MSGID_LABELS.default);
-                    return;
-                }
-
-                try {
-                    const clipboardMsgIds = await readMsgIdsFromClipboard();
-                    const label = clipboardMsgIds.length
-                        ? SEARCH_MSGID_LABELS.fromClipboard
-                        : SEARCH_MSGID_LABELS.default;
-                    searchMsgIdButton.setLabel(label);
-                } catch (error) {
-                    searchMsgIdButton.setLabel(SEARCH_MSGID_LABELS.default);
-                }
-            };
-
-            const updateButtonState = async () => {
+            const updateButtonState = () => {
                 const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
                 buttons.forEach((button) => {
                     const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
                     button.setEnabled(baseEnabled && actionAvailable);
                 });
-                await updateSearchButtonLabel();
             };
 
             window.addEventListener('hashchange', updateButtonState);
