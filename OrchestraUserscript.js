@@ -842,14 +842,13 @@
 
     function collectSelectedMsgIds() {
         const msgIds = Array.from(document.querySelectorAll(CONFIG.selectors.msgIdCells))
-            .map((cell) => {
+            .flatMap((cell) => {
                 const matches = Array.from(cell.innerText.matchAll(/_MSGID:\s*([^,]*)/g));
                 if (!matches.length) {
-                    return null;
+                    return [];
                 }
-                return matches.map((match) => match[1].trim()).join('');
-            })
-            .filter(Boolean);
+                return matches.map((match) => match[1].trim()).filter(Boolean);
+            });
 
         return ensureUniqueValues(msgIds);
     }
