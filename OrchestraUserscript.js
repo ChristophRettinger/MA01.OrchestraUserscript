@@ -75,7 +75,7 @@
         helperPanel: null
     };
 
-    const MSGID_LABELS = ['_MSGID', 'MSGID'];
+    const MSGID_LABELS = ['_MSGID'];
     const BUSINESS_VIEW_LABELS = ['business view', 'business-ansicht', 'business ansicht', 'business - ansicht'];
     const BUSINESS_KEY_PLACEHOLDERS = ['please select a business key', 'bitte wählen sie einen business-schlüssel'];
     const CONNECTOR_AND_LABELS = ['and', 'und'];
@@ -346,13 +346,19 @@
             dispatchMouseClick(element);
             await delay(100);
 
-            const targetLabel = index === 1 ? 'MSGID' : '_MSGID';
-            if (selectBusinessViewOption([targetLabel])) {
+            if (index > 0) {
+                const removeExtraLine = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
+                if (removeExtraLine) {
+                    dispatchMouseClick(removeExtraLine);
+                    await delay(100);
+                } else {
+                    selectFirstAvailableBusinessOption();
+                    allConfigured = false;
+                }
                 continue;
             }
 
-            const fallbackRemoved = index === 1 && selectBusinessViewOption(MSGID_LABELS);
-            if (fallbackRemoved) {
+            if (selectBusinessViewOption(MSGID_LABELS)) {
                 continue;
             }
 
