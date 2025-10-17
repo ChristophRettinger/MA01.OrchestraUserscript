@@ -218,6 +218,21 @@
 
     const isScenarioDetailContext = () => window.location.href.includes('/processes/runtime/');
 
+    // Ensures value lists keep a stable order while removing duplicates.
+    function ensureUniqueValues(values) {
+        const seen = new Set();
+        return values.filter((value) => {
+            if (value == null) {
+                return false;
+            }
+            if (seen.has(value)) {
+                return false;
+            }
+            seen.add(value);
+            return true;
+        });
+    }
+
     function collectScenarioDetailMsgIds({ closeAfterExtraction = false } = {}) {
         if (!isScenarioDetailContext()) {
             return [];
@@ -234,14 +249,16 @@
             .map((cell) => cell.parentElement?.querySelector(CONFIG.selectors.scenarioDetailValueCell)?.textContent?.trim())
             .filter(Boolean);
 
-        if (msgIds.length && closeAfterExtraction) {
+        const uniqueMsgIds = ensureUniqueValues(msgIds);
+
+        if (uniqueMsgIds.length && closeAfterExtraction) {
             const closeButton = document.querySelector(CONFIG.selectors.scenarioDetailCloseButton);
             if (closeButton) {
                 dispatchMouseClick(closeButton);
             }
         }
 
-        return msgIds;
+        return uniqueMsgIds;
     }
 
     const clipboardState = {
@@ -275,10 +292,12 @@
             }
 
             clipboardState.isBlocked = false;
-            return clipboardText
-                .split(/[\s,;]+/)
-                .map((value) => value.trim())
-                .filter((value) => MSGID_CLIPBOARD_PATTERN.test(value));
+            return ensureUniqueValues(
+                clipboardText
+                    .split(/[\s,;]+/)
+                    .map((value) => value.trim())
+                    .filter((value) => MSGID_CLIPBOARD_PATTERN.test(value))
+            );
         } catch (error) {
             handleClipboardReadError(error);
             return [];
@@ -876,7 +895,7 @@
     }
 
     function collectSelectedMsgIds() {
-        return Array.from(document.querySelectorAll(CONFIG.selectors.msgIdCells))
+        const msgIds = Array.from(document.querySelectorAll(CONFIG.selectors.msgIdCells))
             .map((cell) => {
                 const matches = Array.from(cell.innerText.matchAll(/_MSGID:\s*([^,]*)/g));
                 if (!matches.length) {
@@ -885,6 +904,8 @@
                 return matches.map((match) => match[1].trim()).join('');
             })
             .filter(Boolean);
+
+        return ensureUniqueValues(msgIds);
     }
 
     const hasMsgIdSource = () => {
