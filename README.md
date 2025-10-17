@@ -15,16 +15,14 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   A success toast confirms the copy action and references how many keys were included; warnings appear when no usable keys were found.
 
 * Copy MSGIDs
-  Copies `_MSGID` values from hovered or selected rows, the currently opened scenario detail window, or (as a fallback) the clipboard.
+  Copies `_MSGID` values from hovered or selected rows or the currently opened scenario detail window.
   The helper surfaces a toast referencing the source that was used and informs when no usable IDs are available.
   Duplicate MSGIDs are removed automatically so clipboard contents stay clean when multiple widgets expose the same value.
 
 * Search MSGID in Business view
   Opens the Business view tab, prepares the MSGID filters, pastes the resolved MSGID, and triggers the search button.
-  The helper reuses the same MSGID resolution logic as the copy helper and issues a toast describing the search parameters.
-  A 22-digit MSGID present on the clipboard is reused automatically and the button caption highlights this by appending "(from clipboard)".
+  The helper now exclusively uses MSGIDs from the currently selected rows and issues a toast describing the search parameters.
   When multiple sources contain the same MSGID, only the first occurrence is used to avoid redundant search attempts.
-  When clipboard access is blocked by the browser, the helper now falls back gracefully without spamming warnings or freezing the page; manual button presses still retry the clipboard lookup so you can approve the permission dialog and continue working.
 
 ## Availability
 
