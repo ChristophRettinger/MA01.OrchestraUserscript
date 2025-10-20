@@ -35,3 +35,7 @@ The buttons are grouped inside a collapsible panel pinned to the top right of th
 ## Development Notes
 
 The script is structured around a central `CONFIG` object that keeps selectors, colours, and labels together so they can be updated in a single place. UI elements such as the helper panel and toast notifications are encapsulated in dedicated helpers, keeping the business logic for BuKey collection and MSGID copying focused and easy to follow. When adding new helpers, create a button definition via `addButton` and hook it into the shared state update so it inherits the automatic enable/disable behaviour.
+
+## Elastic MessageData Copier
+
+`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/`. As soon as the standard "Copy to clipboard" action becomes available, the script adds an adjacent helper button titled "Copy MessageData to clipboard". Clicking the helper first triggers the built-in copy functionality and then replaces the clipboard contents with the `MessageData1` field extracted from the copied JSON payload. The helper retries clipboard access a few times to account for Elastic's asynchronous updates and logs success or error details to the browser console.
