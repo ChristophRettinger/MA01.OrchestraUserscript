@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orchestra Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-22
+// @version      2025-10-23
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
@@ -72,7 +72,8 @@
     };
 
     const state = {
-        helperPanel: null
+        helperPanel: null,
+        elasticCopyObserver: null
     };
 
     const MSGID_LABELS = ['_MSGID'];
@@ -85,6 +86,19 @@
         scenarioDetail: 'scenario detail'
     };
     const SEARCH_MSGID_LABEL = 'Search MSGID';
+
+    // Elastic page enhancer: adds a companion button next to the native "Copy to clipboard"
+    // control so MessageData1 can be extracted directly after the Elastic payload is copied.
+    const ELASTIC_COPY_CONFIG = {
+        iconSelector: 'svg[data-icon-type="copyClipboard"]',
+        insertedButtonAttribute: 'orchestraMessageDataButton',
+        sourceButtonAttribute: 'orchestraMessageDataEnhanced',
+        buttonLabel: 'Copy MessageData to clipboard',
+        clipboardFieldName: 'MessageData1',
+        initialDelayMs: 150,
+        retryDelayMs: 150,
+        maxAttempts: 5
+    };
 
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -1075,6 +1089,158 @@
         return panel.addButton(config);
     }
 
+    function extractMessageDataField(data) {
+        if (!data || typeof data !== 'object') {
+            return null;
+        }
+
+        const { clipboardFieldName } = ELASTIC_COPY_CONFIG;
+
+        const directValue = data._source?.[clipboardFieldName];
+        if (typeof directValue === 'string' && directValue) {
+            return directValue;
+        }
+
+        const fieldArray = data.fields?.[clipboardFieldName];
+        if (Array.isArray(fieldArray)) {
+            const candidate = fieldArray.find((value) => typeof value === 'string' && value);
+            if (candidate) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    async function copyMessageDataToClipboard(sourceButton) {
+        try {
+            sourceButton.click();
+
+            let clipboardText = '';
+            let parsedJson = null;
+            let parseError = null;
+
+            for (let attempt = 0; attempt < ELASTIC_COPY_CONFIG.maxAttempts; attempt += 1) {
+                const waitTime = attempt === 0 ? ELASTIC_COPY_CONFIG.initialDelayMs : ELASTIC_COPY_CONFIG.retryDelayMs;
+                if (waitTime > 0) {
+                    await delay(waitTime);
+                }
+
+                try {
+                    clipboardText = await navigator.clipboard.readText();
+                } catch (readError) {
+                    console.error('An error occurred while reading the clipboard:', readError);
+                    return;
+                }
+
+                if (!clipboardText) {
+                    continue;
+                }
+
+                try {
+                    parsedJson = JSON.parse(clipboardText);
+                    parseError = null;
+                    break;
+                } catch (error) {
+                    parseError = error;
+                }
+            }
+
+            if (!clipboardText) {
+                console.error('Clipboard is empty or content is not accessible.');
+                return;
+            }
+
+            if (!parsedJson) {
+                console.error('Failed to parse clipboard content as JSON:', parseError);
+                return;
+            }
+
+            const messageData = extractMessageDataField(parsedJson);
+            if (!messageData) {
+                console.error('`MessageData1` field not found in the clipboard JSON.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(messageData);
+                console.log('Clipboard updated with the `MessageData1` field.');
+            } catch (writeError) {
+                console.error('An error occurred while writing to the clipboard:', writeError);
+            }
+        } catch (error) {
+            console.error('An error occurred while enhancing the Elastic copy functionality:', error);
+        }
+    }
+
+    function createMessageDataButton(copyButton) {
+        const clonedButton = copyButton.cloneNode(true);
+        clonedButton.dataset[ELASTIC_COPY_CONFIG.insertedButtonAttribute] = 'true';
+
+        const textSpan = clonedButton.querySelector('.euiButtonEmpty__text');
+        if (textSpan) {
+            textSpan.textContent = ELASTIC_COPY_CONFIG.buttonLabel;
+        }
+
+        clonedButton.setAttribute('aria-label', ELASTIC_COPY_CONFIG.buttonLabel);
+        clonedButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            copyMessageDataToClipboard(copyButton);
+        });
+
+        return clonedButton;
+    }
+
+    function initializeElasticCopyMessageButton() {
+        if (state.elasticCopyObserver) {
+            return;
+        }
+
+        if (!navigator.clipboard) {
+            console.warn('Clipboard API is not available; Elastic copy enhancements are disabled.');
+            return;
+        }
+
+        const enhanceButtons = () => {
+            const icons = Array.from(document.querySelectorAll(ELASTIC_COPY_CONFIG.iconSelector));
+            icons
+                .map((icon) => icon.closest('button'))
+                .filter(Boolean)
+                .filter((button) => button.dataset[ELASTIC_COPY_CONFIG.insertedButtonAttribute] !== 'true')
+                .forEach((button) => {
+                    if (button.dataset[ELASTIC_COPY_CONFIG.sourceButtonAttribute] === 'true') {
+                        return;
+                    }
+
+                    const messageButton = createMessageDataButton(button);
+                    button.insertAdjacentElement('afterend', messageButton);
+                    button.dataset[ELASTIC_COPY_CONFIG.sourceButtonAttribute] = 'true';
+                });
+        };
+
+        const setupObserver = () => {
+            if (!document.body) {
+                console.warn('Document body is not ready; skipping Elastic copy enhancements setup.');
+                return;
+            }
+
+            enhanceButtons();
+
+            state.elasticCopyObserver = new MutationObserver(enhanceButtons);
+            state.elasticCopyObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupObserver, { once: true });
+        } else {
+            setupObserver();
+        }
+    }
+
     function initializeHelperPanel() {
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
             const host = document.body; // must be body due to iframe constraints
@@ -1137,4 +1303,5 @@
 
     console.log('Orchestra Helper Functions loaded');
     initializeHelperPanel();
+    initializeElasticCopyMessageButton();
 })();

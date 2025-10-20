@@ -19,6 +19,15 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   The helper surfaces a toast referencing the source that was used and informs when no usable IDs are available.
   Duplicate MSGIDs are removed automatically so clipboard contents stay clean when multiple widgets expose the same value.
 
+## Elastic Userscript
+
+An additional userscript is available in `ElasticUserscript.js` for the Elastic web interface. Install this script alongside the main Orchestra helper when you need clipboard tooling within Elastic search results.
+
+* Copy Elastic MessageData
+  When browsing Elastic search results, the Elastic userscript augments the native "Copy to clipboard" control with a companion button.
+  The helper triggers the original copy action, extracts the `MessageData1` field from the JSON payload, and places it directly in the clipboard.
+  Console messages explain when the clipboard cannot be read, parsed, or when the expected field is missing.
+
 * Search MSGID in Business view
   Opens the Business view tab, prepares the MSGID filters, pastes the resolved MSGID, and triggers the search button.
   The helper now exclusively uses MSGIDs from the currently selected rows and issues a toast describing the search parameters.
