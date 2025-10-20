@@ -219,7 +219,11 @@
         const icons = document.querySelectorAll(CONFIG.selectors.copyIcon);
         icons.forEach((icon) => {
             const copyButton = icon.closest('button');
-            if (!copyButton || STATE.helperButtons.has(copyButton)) {
+            if (
+                !copyButton ||
+                copyButton.dataset.elasticHelper === 'messageDataCopy' ||
+                STATE.helperButtons.has(copyButton)
+            ) {
                 return;
             }
             const helperButton = createHelperButton(copyButton, icon);
