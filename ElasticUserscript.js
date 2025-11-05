@@ -219,9 +219,26 @@
         const icons = document.querySelectorAll(CONFIG.selectors.copyIcon);
         icons.forEach((icon) => {
             const copyButton = icon.closest('button');
-            if (!copyButton || STATE.helperButtons.has(copyButton)) {
+            if (!copyButton) {
                 return;
             }
+
+            const cachedHelper = STATE.helperButtons.get(copyButton);
+            if (cachedHelper) {
+                // Elastic re-renders the detail panel in place when navigating between records.
+                // That process frequently detaches our helper button from the DOM while keeping
+                // the original copy button instance alive. When we detect such a scenario we
+                // simply re-attach the existing helper so users always see the extra action.
+                const helperNeedsReattachment =
+                    !cachedHelper.isConnected ||
+                    cachedHelper.parentElement !== copyButton.parentElement ||
+                    copyButton.nextElementSibling !== cachedHelper;
+                if (helperNeedsReattachment) {
+                    copyButton.insertAdjacentElement('afterend', cachedHelper);
+                }
+                return;
+            }
+
             const helperButton = createHelperButton(copyButton, icon);
             if (!helperButton) {
                 return;
