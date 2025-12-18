@@ -18,7 +18,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 * Extract Business Keys
   * Default action: **As CSV** – extracts all visible business keys from the selected rows and exports them as `;` separated CSV with quotes when needed.
   * Further options: **As Table** (tab separated, unquoted) and **As List** (one comma-separated list per business key).
-  * The helper now captures every business key present in the selected rows instead of stopping at `_MSGID`.
+  * Keys are parsed from the `_MSGID` cell using the `Key: Value, Key2: Value2` spacing so values that contain commas or colons remain intact.
 
 * Extract Startup Info
   * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys with line feeds between records.

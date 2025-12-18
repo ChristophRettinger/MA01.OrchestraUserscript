@@ -1101,19 +1101,55 @@
         );
     };
 
-    function extractBusinessKeyRow(row) {
-        const data = Object.create(null);
+    // Business key values are embedded in a single cell as "Key: Value, Other_Key: Value" with values that may contain commas or colons.
+    // Keys start with an underscore or uppercase letter and always include at least one underscore.
+    const BUSINESS_KEY_PATTERN = /([A-Z_][A-Za-z0-9.-]*_[A-Za-z0-9.-]*)\s*:\s*/g;
+
+    const findMsgIdCell = (row) => {
         if (!row) {
+            return null;
+        }
+        const cells = Array.from(row.querySelectorAll('.mTable-data-cell, td'));
+        return cells.find((cell) => {
+            const text = cell?.textContent || '';
+            return MSGID_LABELS.some((label) => text.includes(label));
+        });
+    };
+
+    const parseBusinessKeyCell = (text) => {
+        const data = Object.create(null);
+        if (typeof text !== 'string' || !text.trim()) {
             return data;
         }
-        const text = row.innerText || '';
-        const matches = Array.from(text.matchAll(/([A-Za-z0-9._-]+):\s*([^|,\n\r]+)/g));
-        matches.forEach(([, key, value]) => {
-            if (key && value) {
-                data[key.trim()] = value.trim();
+
+        BUSINESS_KEY_PATTERN.lastIndex = 0;
+        const matches = [];
+        let match;
+        while ((match = BUSINESS_KEY_PATTERN.exec(text)) !== null) {
+            matches.push({
+                key: match[1],
+                index: match.index,
+                length: match[0].length
+            });
+        }
+
+        matches.forEach((entry, index) => {
+            const valueStart = entry.index + entry.length;
+            const valueEnd = index < matches.length - 1 ? matches[index + 1].index : text.length;
+            const rawValue = text.slice(valueStart, valueEnd);
+            const normalized = rawValue.replace(/^[\s,]+|[\s,]+$/g, '');
+            if (entry.key && normalized) {
+                data[entry.key] = normalized;
             }
         });
+
         return data;
+    };
+
+    function extractBusinessKeyRow(row) {
+        const sourceCell = findMsgIdCell(row);
+        const text = sourceCell?.textContent || row?.innerText || '';
+        return parseBusinessKeyCell(text);
     }
 
     function collectBusinessKeyRows() {
