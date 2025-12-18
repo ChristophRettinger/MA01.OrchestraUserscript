@@ -23,6 +23,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 * Extract Startup Info
   * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys with line feeds between records.
   * Further options: **As CSV** (quoted, `;` separated) and **As Elastic query** (mirrors the former "Copy Startup for Elastic" output).
+  * Startup extraction now honours only the currently selected rows and snapshots that list before opening any dialogs, keeping later row highlights from changing the processed set.
   * The cancellable progress toast remains in place while opening each row's Startup window.
 
 ## Availability

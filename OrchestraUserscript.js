@@ -1282,9 +1282,12 @@
     }
 
     async function getBuKeysArray() {
-        const rows = Array.from(document.querySelectorAll(CONFIG.selectors.rows));
+        // Snapshot the currently selected rows up front so later context menu interactions
+        // cannot change which records get processed.
+        const rows = getSelectedRows().map((row, index) => ({ element: row, index }));
         const totalRows = rows.length;
         if (!totalRows) {
+            showToast('Select at least one row before extracting startup info.', { type: 'warning' });
             return [];
         }
 
@@ -1311,7 +1314,7 @@
         });
 
         const buKeys = [];
-        for (const [index, row] of rows.entries()) {
+        for (const [index, rowData] of rows.entries()) {
             if (cancelled) {
                 break;
             }
@@ -1321,7 +1324,7 @@
                 progressToast.update(`Processing row ${processedCount} of ${totalRows}…`);
             }
 
-            const value = await processRowForBuKeys(row);
+            const value = await processRowForBuKeys(rowData.element);
             if (cancelled) {
                 break;
             }
