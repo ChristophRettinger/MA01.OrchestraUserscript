@@ -23,6 +23,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   Opens the Business view tab, prepares the MSGID filters, pastes the resolved MSGID, and triggers the search button.
   The helper now exclusively uses MSGIDs from the currently selected rows and issues a toast describing the search parameters.
   Duplicate MSGIDs are removed from the selected rows before the search so the Business view is queried only once per value.
+  Existing Business view filters are cleared automatically and replaced with a single MSGID filter configured from the first available ID so stale conditions cannot affect the search.
 
 ## Availability
 

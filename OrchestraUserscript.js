@@ -125,15 +125,10 @@
                 return;
             }
 
-            const selectorsReady = await ensureBusinessViewKeySelectors();
-            await ensureBusinessViewConnectorIsOr();
+            const filtersReady = await prepareBusinessViewMsgIdFilter(msgIds);
 
-            if (!selectorsReady) {
-                showToast('Business view key selection could not be fully automated. Please verify the filters.', { type: 'warning' });
-            }
-
-            if (!fillBusinessViewInputs(msgId)) {
-                showToast('Failed to locate the Business view input fields.', { type: 'error' });
+            if (!filtersReady) {
+                showToast('Business view filter could not be fully automated. Please verify the MSGID selection and input.', { type: 'warning' });
                 return;
             }
 
@@ -324,74 +319,58 @@
     }
 
     // Ensures the Business view has MSGID selectors prepared so the automatic search can run.
-    async function ensureBusinessViewKeySelectors() {
-        const removeButton = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
-        if (!removeButton) {
-            const addButton = document.querySelector(CONFIG.selectors.businessViewAddButton);
-            if (addButton) {
-                dispatchMouseClick(addButton);
-                await delay(100);
-            }
+    // Configures the Business view to search for the first available MSGID by resetting filters and filling the input.
+    async function prepareBusinessViewMsgIdFilter(msgIds) {
+        const msgId = msgIds?.[0];
+        if (!msgId) {
+            return false;
         }
 
-        const textBoxes = getBusinessViewTextBoxes();
-        const pendingBoxes = textBoxes.filter((element) => {
-            const text = normalizeText(element.textContent);
-            return BUSINESS_KEY_PLACEHOLDERS.some((placeholder) => text.includes(placeholder));
-        });
-
-        let allConfigured = true;
-        for (let index = 0; index < pendingBoxes.length; index += 1) {
-            const element = pendingBoxes[index];
-            dispatchMouseClick(element);
+        // Remove existing filters; the UI always leaves one row, so we avoid adding new ones afterwards.
+        while (true) {
+            const removeButton = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
+            if (!removeButton) {
+                break;
+            }
+            dispatchMouseClick(removeButton);
             await delay(100);
-
-            if (index > 0) {
-                const removeExtraLine = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
-                if (removeExtraLine) {
-                    dispatchMouseClick(removeExtraLine);
-                    await delay(100);
-                } else {
-                    selectFirstAvailableBusinessOption();
-                    allConfigured = false;
-                }
-                continue;
-            }
-
-            if (selectBusinessViewOption(MSGID_LABELS)) {
-                continue;
-            }
-
-            const remove = document.querySelector(CONFIG.selectors.businessViewRemoveButton);
-            if (remove) {
-                dispatchMouseClick(remove);
-            } else {
-                selectFirstAvailableBusinessOption();
-            }
-            allConfigured = false;
         }
 
-        return allConfigured;
-    }
+        const closeBusinessViewDropdown = () => {
+            const dialogTable = document.querySelector('.dialogTable');
+            if (dialogTable) {
+                dispatchMouseClick(dialogTable);
+            }
+        };
 
-    async function ensureBusinessViewConnectorIsOr() {
+        const keySelectors = getBusinessViewTextBoxes();
+        const keyBox = keySelectors.find((element) => {
+            const text = normalizeText(element.textContent);
+            return BUSINESS_KEY_PLACEHOLDERS.some((placeholder) => text.includes(placeholder)) || MSGID_LABELS.includes(text);
+        }) ?? keySelectors[0];
+
+        if (!keyBox) {
+            return false;
+        }
+
+        dispatchMouseClick(keyBox);
+        await delay(100);
+        const currentKey = normalizeText(keyBox.textContent);
+        const keySelected = selectBusinessViewOption(MSGID_LABELS) || MSGID_LABELS.includes(currentKey);
+        closeBusinessViewDropdown();
+
         const connector = getBusinessViewTextBoxes().find((element) => {
             const text = normalizeText(element.textContent);
             return CONNECTOR_AND_LABELS.includes(text);
         });
 
-        if (!connector) {
-            return;
+        if (connector) {
+            dispatchMouseClick(connector);
+            await delay(100);
+            selectBusinessViewOption(CONNECTOR_OR_LABELS) || selectFirstAvailableBusinessOption();
+            closeBusinessViewDropdown();
         }
 
-        dispatchMouseClick(connector);
-        await delay(100);
-        if (!selectBusinessViewOption(CONNECTOR_OR_LABELS)) {
-            selectFirstAvailableBusinessOption();
-        }
-    }
-
-    function fillBusinessViewInputs(value) {
         const inputs = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewInputs));
         if (!inputs.length) {
             return false;
@@ -399,12 +378,12 @@
 
         inputs.forEach((input) => {
             input.focus();
-            input.value = value;
+            input.value = msgId;
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        return true;
+        return keySelected;
     }
 
     function triggerBusinessViewSearch() {
