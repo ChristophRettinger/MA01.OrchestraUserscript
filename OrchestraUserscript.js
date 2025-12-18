@@ -82,6 +82,7 @@
     const CONNECTOR_AND_LABELS = ['and', 'und'];
     const CONNECTOR_OR_LABELS = ['or', 'oder'];
     const MSGID_SOURCE_LABELS = {
+        clipboard: 'clipboard',
         selection: 'selected rows',
         scenarioDetail: 'scenario detail'
     };
@@ -105,11 +106,10 @@
     }
 
     // Drives the Business view UI to search for the resolved MSGID automatically.
-    async function searchMsgIdInBusinessView() {
+    async function searchMsgIdsInBusinessView(msgIds, sourceLabel) {
         try {
-            const msgIds = collectSelectedMsgIds();
-            if (!msgIds.length) {
-                showToast('Select at least one row before searching for an MSGID.', { type: 'warning' });
+            if (!Array.isArray(msgIds) || msgIds.length === 0) {
+                showToast('Provide at least one MSGID before triggering the Business view search.', { type: 'warning' });
                 return;
             }
 
@@ -138,7 +138,8 @@
                 return;
             }
 
-            showToast(`Searching Business view for MSGID ${msgId} (${MSGID_SOURCE_LABELS.selection}).`, { type: 'success' });
+            const origin = sourceLabel || MSGID_SOURCE_LABELS.selection;
+            showToast(`Searching Business view for MSGID ${msgId} (${origin}).`, { type: 'success' });
         } catch (error) {
             console.error('Failed to search MSGID in Business view', error);
             showToast('Failed to search the Business view. Check console for details.', { type: 'error' });
@@ -748,6 +749,212 @@
             controller.setEnabled(false);
             return controller;
         }
+
+        addActionGroup({ label, icon, defaultOptionId, options, isActionAvailable }) {
+            if (!Array.isArray(options) || options.length === 0) {
+                throw new TypeError('options must be a non-empty array.');
+            }
+
+            const host = createElement('div');
+            applyStyles(host, {
+                display: 'flex',
+                gap: '4px',
+                position: 'relative',
+                alignItems: 'stretch'
+            });
+
+            const optionMap = new Map();
+            options.forEach((option, index) => {
+                const optionId = option.id ?? `option-${index}`;
+                optionMap.set(optionId, { ...option, id: optionId });
+            });
+
+            let currentDefault = optionMap.get(defaultOptionId) || optionMap.values().next().value;
+
+            const mainButton = createElement('button', {
+                attributes: { type: 'button' }
+            });
+            applyStyles(mainButton, {
+                border: '1px solid black',
+                padding: '4px 6px',
+                textAlign: 'left',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                justifyContent: 'space-between',
+                fontFamily: 'inherit',
+                fontSize: '12px',
+                flex: '1'
+            });
+
+            const labelWrapper = createElement('div');
+            applyStyles(labelWrapper, {
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '2px'
+            });
+
+            if (icon) {
+                const iconSpan = createElement('span', { textContent: icon });
+                iconSpan.setAttribute('aria-hidden', 'true');
+                applyStyles(iconSpan, {
+                    width: '16px',
+                    display: 'inline-flex',
+                    justifyContent: 'center'
+                });
+                mainButton.appendChild(iconSpan);
+            }
+
+            const labelSpan = createElement('span', { textContent: label });
+            labelWrapper.appendChild(labelSpan);
+            const defaultLabelSpan = createElement('span', { textContent: '' });
+            applyStyles(defaultLabelSpan, {
+                fontSize: '11px',
+                color: '#424242'
+            });
+            labelWrapper.appendChild(defaultLabelSpan);
+            mainButton.appendChild(labelWrapper);
+
+            const dropdownToggle = createElement('button', { textContent: '⋯', attributes: { type: 'button' } });
+            applyStyles(dropdownToggle, {
+                border: '1px solid black',
+                padding: '4px',
+                width: '28px',
+                borderRadius: '2px',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+            });
+
+            const dropdown = createElement('div');
+            applyStyles(dropdown, {
+                position: 'absolute',
+                top: '100%',
+                right: '0',
+                display: 'none',
+                flexDirection: 'column',
+                background: '#ffffff',
+                border: '1px solid black',
+                borderRadius: '2px',
+                padding: '4px',
+                gap: '4px',
+                minWidth: '180px',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                zIndex: String(Number(CONFIG.panel.zIndex) + 1)
+            });
+
+            let dropdownOpen = false;
+
+            const setDefaultOption = (option) => {
+                currentDefault = option;
+                defaultLabelSpan.textContent = option?.label || '';
+            };
+
+            const closeDropdown = () => {
+                dropdownOpen = false;
+                dropdown.style.display = 'none';
+            };
+
+            const toggleDropdown = () => {
+                dropdownOpen = !dropdownOpen;
+                dropdown.style.display = dropdownOpen ? 'flex' : 'none';
+            };
+
+            const handleOutsideClick = (event) => {
+                if (!dropdownOpen) {
+                    return;
+                }
+                if (host.contains(event.target)) {
+                    return;
+                }
+                closeDropdown();
+            };
+
+            document.addEventListener('click', handleOutsideClick);
+
+            const runOption = (option) => {
+                if (!option || typeof option.onSelect !== 'function') {
+                    return;
+                }
+                if (!enabled || (controller.isActionAvailable && !controller.isActionAvailable())) {
+                    return;
+                }
+                setDefaultOption(option);
+                closeDropdown();
+                option.onSelect();
+            };
+
+            options.forEach((option, index) => {
+                const optionId = option.id ?? `option-${index}`;
+                const optionButton = createElement('button', {
+                    textContent: option.label,
+                    attributes: { type: 'button', 'data-option-id': optionId }
+                });
+                applyStyles(optionButton, {
+                    border: '1px solid black',
+                    padding: '4px 6px',
+                    textAlign: 'left',
+                    borderRadius: '2px',
+                    fontFamily: 'inherit',
+                    fontSize: '12px',
+                    background: '#f5f5f5'
+                });
+                optionButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const currentOption = optionMap.get(optionId);
+                    runOption(currentOption);
+                });
+                dropdown.appendChild(optionButton);
+            });
+
+            mainButton.addEventListener('click', () => runOption(currentDefault));
+            dropdownToggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleDropdown();
+            });
+
+            host.appendChild(mainButton);
+            host.appendChild(dropdownToggle);
+            host.appendChild(dropdown);
+            this.content.appendChild(host);
+
+            let enabled = false;
+
+            const controller = {
+                element: host,
+                isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
+                setEnabled(value) {
+                    enabled = Boolean(value);
+                    const baseStyles = {
+                        background: enabled ? CONFIG.colors.buttonEnabled : CONFIG.colors.buttonDisabled,
+                        cursor: enabled ? 'pointer' : 'not-allowed',
+                        opacity: enabled ? '1' : '0.5'
+                    };
+                    applyStyles(mainButton, baseStyles);
+                    applyStyles(dropdownToggle, baseStyles);
+                    mainButton.disabled = !enabled;
+                    dropdownToggle.disabled = !enabled;
+                    dropdown.querySelectorAll('button').forEach((button) => {
+                        button.disabled = !enabled;
+                        applyStyles(button, {
+                            cursor: enabled ? 'pointer' : 'not-allowed',
+                            opacity: enabled ? '1' : '0.7'
+                        });
+                    });
+                    if (!enabled) {
+                        closeDropdown();
+                    }
+                }
+            };
+
+            setDefaultOption(currentDefault);
+            controller.setEnabled(false);
+            return controller;
+        }
     }
 
     function createHelperPanel(parent) {
@@ -824,6 +1031,31 @@
         return ensureUniqueValues(msgIds);
     }
 
+    function parseClipboardMsgIds(text) {
+        if (typeof text !== 'string') {
+            return [];
+        }
+        return ensureUniqueValues(
+            text
+                .split(/[,;\s\n\t]+/)
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+        );
+    }
+
+    const getMsgIdsFromSelection = () => collectSelectedMsgIds();
+
+    async function getMsgIdsFromClipboard() {
+        try {
+            const clipboardText = await navigator.clipboard.readText();
+            return parseClipboardMsgIds(clipboardText);
+        } catch (error) {
+            console.error('Unable to read MSGID from clipboard', error);
+            showToast('Could not read MSGID from the clipboard. Allow clipboard permissions and try again.', { type: 'error' });
+            return [];
+        }
+    }
+
     const hasMsgIdSource = () => {
         if (collectSelectedMsgIds().length > 0) {
             return true;
@@ -840,6 +1072,127 @@
         }
         return [];
     }
+
+    const getSelectedRows = () => {
+        const selectors = ['.mTable-row-hover', '.mTable-row-selected'];
+        return ensureUniqueValues(
+            selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+        );
+    };
+
+    function extractBusinessKeyRow(row) {
+        const data = Object.create(null);
+        if (!row) {
+            return data;
+        }
+        const text = row.innerText || '';
+        const matches = Array.from(text.matchAll(/([A-Za-z0-9._-]+):\s*([^|,\n\r]+)/g));
+        matches.forEach(([, key, value]) => {
+            if (key && value) {
+                data[key.trim()] = value.trim();
+            }
+        });
+        return data;
+    }
+
+    function collectBusinessKeyRows() {
+        const rows = getSelectedRows();
+        return rows
+            .map(extractBusinessKeyRow)
+            .filter((row) => Object.keys(row).length > 0);
+    }
+
+    const collectHeaders = (rows) => {
+        const headers = ensureUniqueValues(rows.flatMap((row) => Object.keys(row || {})));
+        const msgIdIndex = headers.indexOf('_MSGID');
+        if (msgIdIndex > 0) {
+            headers.splice(msgIdIndex, 1);
+            headers.unshift('_MSGID');
+        }
+        return headers;
+    };
+
+    const needsQuotes = (value, separator) => {
+        return new RegExp(`[\"${separator}\n]`).test(value);
+    };
+
+    const escapeValue = (value, separator, quoteValues = false) => {
+        const normalized = value == null ? '' : String(value);
+        if (!quoteValues) {
+            return normalized;
+        }
+        if (!needsQuotes(normalized, separator)) {
+            return normalized;
+        }
+        const escaped = normalized.replace(/\"/g, '""');
+        return `"${escaped}"`;
+    };
+
+    function formatRows(rows, separator, quoteValues) {
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return '';
+        }
+
+        const headers = collectHeaders(rows);
+        if (!headers.length) {
+            return '';
+        }
+
+        const lines = [headers.join(separator)];
+        rows.forEach((row) => {
+            const line = headers
+                .map((header) => escapeValue(row[header], separator, quoteValues))
+                .join(separator);
+            lines.push(line);
+        });
+        return lines.join('\n');
+    }
+
+    const formatRowsAsCsv = (rows) => formatRows(rows, ';', true);
+    const formatRowsAsTab = (rows) => formatRows(rows, '\t', false);
+
+    function formatRowsAsLists(rows) {
+        const headers = collectHeaders(rows);
+        if (!headers.length) {
+            return '';
+        }
+
+        const lines = headers.map((header) => {
+            const values = rows
+                .map((row) => row[header])
+                .filter(Boolean);
+            return `${header}\n${ensureUniqueValues(values).join(', ')}`;
+        });
+
+        return lines.join('\n\n');
+    }
+
+    const formatMsgIdsAsCsv = (msgIds) => {
+        if (!msgIds.length) {
+            return '';
+        }
+        const lines = ['MSGID', ...msgIds];
+        return lines.join('\n');
+    };
+
+    const formatMsgIdsAsList = (msgIds) => {
+        if (!msgIds.length) {
+            return '';
+        }
+        return `MSGID\n${msgIds.join(', ')}`;
+    };
+
+    const formatMsgIdsAsTab = (msgIds) => {
+        if (!msgIds.length) {
+            return '';
+        }
+        return ['MSGID', ...msgIds].join('\n');
+    };
+
+    const formatMsgIdsAsElastic = (msgIds) => {
+        const clauses = msgIds.map((msgId) => `BusinessCaseId:${msgId}`);
+        return clauses.length ? `(${clauses.join(' or ')})` : '';
+    };
 
     async function openChangeVariablesPopup(row) {
         const processNameCell = row.querySelector(CONFIG.selectors.processNameCell);
@@ -970,7 +1323,102 @@
 
     const pluralize = (word, count) => (count === 1 ? word : `${word}s`);
 
-    async function copyBuKeys() {
+    async function ensureMsgIdsAvailable(getter, { emptyMessage, sourceLabel }) {
+        const msgIds = await getter();
+        const normalized = ensureUniqueValues(msgIds);
+        if (!normalized.length) {
+            showToast(emptyMessage, { type: 'warning' });
+            return null;
+        }
+        return { msgIds: normalized, sourceLabel };
+    }
+
+    async function searchMsgIdFromSelection() {
+        const result = await ensureMsgIdsAvailable(getMsgIdsFromSelection, {
+            emptyMessage: 'Select at least one row before searching for an MSGID.',
+            sourceLabel: MSGID_SOURCE_LABELS.selection
+        });
+
+        if (!result) {
+            return;
+        }
+
+        await searchMsgIdsInBusinessView(result.msgIds, result.sourceLabel);
+    }
+
+    async function searchMsgIdFromClipboard() {
+        const result = await ensureMsgIdsAvailable(getMsgIdsFromClipboard, {
+            emptyMessage: 'Clipboard does not contain a valid MSGID yet.',
+            sourceLabel: MSGID_SOURCE_LABELS.clipboard
+        });
+
+        if (!result) {
+            return;
+        }
+
+        await searchMsgIdsInBusinessView(result.msgIds, result.sourceLabel);
+    }
+
+    async function copyMsgIds(formatter, label) {
+        try {
+            const result = await ensureMsgIdsAvailable(getMsgIdsFromSelection, {
+                emptyMessage: 'Select at least one row with an MSGID first.',
+                sourceLabel: MSGID_SOURCE_LABELS.selection
+            });
+            if (!result) {
+                return;
+            }
+
+            const content = formatter(result.msgIds);
+            if (!content) {
+                showToast('Unable to format MSGIDs for export.', { type: 'error' });
+                return;
+            }
+
+            await navigator.clipboard.writeText(content);
+            const labelText = pluralize('MSGID', result.msgIds.length);
+            showToast(`Copied ${result.msgIds.length} ${labelText} ${label}.`, { type: 'success' });
+        } catch (error) {
+            console.error('Failed to copy MSGIDs', error);
+            showToast('Failed to copy MSGIDs. Check console for details.', { type: 'error' });
+        }
+    }
+
+    const copyMsgIdsAsCsv = () => copyMsgIds(formatMsgIdsAsCsv, 'as CSV');
+    const copyMsgIdsAsTab = () => copyMsgIds(formatMsgIdsAsTab, 'as a table');
+    const copyMsgIdsAsList = () => copyMsgIds(formatMsgIdsAsList, 'as a list');
+    const copyMsgIdsAsElastic = () => copyMsgIds(formatMsgIdsAsElastic, 'for Elastic search');
+
+    async function copyBusinessKeys(formatter, label) {
+        try {
+            const rows = collectBusinessKeyRows();
+            if (!rows.length) {
+                showToast('Select at least one row with business keys first.', { type: 'warning' });
+                return;
+            }
+            const content = formatter(rows);
+            if (!content) {
+                showToast('No business keys found in the selected rows.', { type: 'warning' });
+                return;
+            }
+
+            await navigator.clipboard.writeText(content);
+            showToast(`Copied business keys ${label}.`, { type: 'success' });
+        } catch (error) {
+            console.error('Failed to copy business keys', error);
+            showToast('Failed to copy business keys. Check console for details.', { type: 'error' });
+        }
+    }
+
+    const copyBusinessKeysAsCsv = () => copyBusinessKeys(formatRowsAsCsv, 'as CSV');
+    const copyBusinessKeysAsTab = () => copyBusinessKeys(formatRowsAsTab, 'as a table');
+    const copyBusinessKeysAsList = () => copyBusinessKeys(formatRowsAsLists, 'as grouped lists');
+
+    function mapBuKeysToRows(values) {
+        return values.map((value) => parseSubflRow(String(value || ''))).filter((row) => Object.keys(row).length > 0);
+    }
+
+    async function copyStartupBuKeys() {
         try {
             const buKeys = await getBuKeysArray();
             if (buKeys === null) {
@@ -987,6 +1435,26 @@
         } catch (error) {
             console.error('Failed to copy BuKeys', error);
             showToast('Failed to copy BuKeys. Check console for details.', { type: 'error' });
+        }
+    }
+
+    async function copyStartupBuKeysAsCsv() {
+        try {
+            const buKeys = await getBuKeysArray();
+            if (buKeys === null) {
+                return;
+            }
+            const rows = mapBuKeysToRows(buKeys);
+            if (!rows.length) {
+                showToast('No startup information found for the current rows.', { type: 'warning' });
+                return;
+            }
+            const content = formatRowsAsCsv(rows);
+            await navigator.clipboard.writeText(content);
+            showToast('Copied startup information as CSV.', { type: 'success' });
+        } catch (error) {
+            console.error('Failed to copy startup info as CSV', error);
+            showToast('Failed to format startup info as CSV. Check console for details.', { type: 'error' });
         }
     }
 
@@ -1011,25 +1479,6 @@
         }
     }
 
-    async function copySelectedMsgIds() {
-        try {
-            const { msgIds, source } = await resolveMsgIds({ closeScenarioDetail: true });
-            if (!msgIds.length) {
-                showToast('No MSGID available. Select a row or open the scenario detail first.', { type: 'warning' });
-                return;
-            }
-
-            await navigator.clipboard.writeText(msgIds.join(', '));
-
-            const label = pluralize('MSGID', msgIds.length);
-            const sourceLabel = source ? MSGID_SOURCE_LABELS[source] : 'current context';
-            showToast(`Copied ${msgIds.length} ${label} from the ${sourceLabel} to the clipboard.`, { type: 'success' });
-        } catch (error) {
-            console.error('Failed to copy MSGIDs', error);
-            showToast('Failed to copy MSGIDs. Check console for details.', { type: 'error' });
-        }
-    }
-
     function addButton(parent, config) {
         const parentElement = typeof parent === 'string' ? document.querySelector(parent) : parent;
         const host = parentElement || document.body;
@@ -1040,38 +1489,65 @@
         return panel.addButton(config);
     }
 
+    function addActionGroup(parent, config) {
+        const parentElement = typeof parent === 'string' ? document.querySelector(parent) : parent;
+        const host = parentElement || document.body;
+        const panel = createHelperPanel(host);
+        if (!panel) {
+            return null;
+        }
+        return panel.addActionGroup(config);
+    }
+
     function initializeHelperPanel() {
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
             const host = document.body; // must be body due to iframe constraints
-            const copyStartupBuKeysButton = addButton(host, {
-                label: 'Copy Startup BuKeys',
-                icon: '🔑',
-                onClick: copyBuKeys
+            const searchMsgIdGroup = addActionGroup(host, {
+                label: 'Search by MSGID',
+                icon: '🔎',
+                defaultOptionId: 'selection',
+                options: [
+                    { id: 'selection', label: 'From selection (Default)', onSelect: searchMsgIdFromSelection },
+                    { id: 'clipboard', label: 'From clipboard', onSelect: searchMsgIdFromClipboard }
+                ]
             });
-            const copyElasticButton = addButton(host, {
-                label: 'Copy Startup for Elastic',
-                icon: '🧭',
-                onClick: copyElastic
-            });
-            const copyMsgIdsButton = addButton(host, {
+
+            const copyMsgIdsGroup = addActionGroup(host, {
                 label: 'Copy MSGIDs',
                 icon: '📋',
-                onClick: copySelectedMsgIds,
-                isActionAvailable: hasMsgIdSource
-            });
-            const searchMsgIdButton = addButton(host, {
-                label: SEARCH_MSGID_LABEL,
-                icon: '🔎',
-                onClick: searchMsgIdInBusinessView,
+                defaultOptionId: 'csv',
+                options: [
+                    { id: 'csv', label: 'As CSV (Default)', onSelect: copyMsgIdsAsCsv },
+                    { id: 'table', label: 'As Table', onSelect: copyMsgIdsAsTab },
+                    { id: 'list', label: 'As List', onSelect: copyMsgIdsAsList },
+                    { id: 'elastic', label: 'As Elastic search', onSelect: copyMsgIdsAsElastic }
+                ],
                 isActionAvailable: hasMsgIdSource
             });
 
-            const buttons = [
-                copyStartupBuKeysButton,
-                copyElasticButton,
-                copyMsgIdsButton,
-                searchMsgIdButton
-            ].filter(Boolean);
+            const businessKeysGroup = addActionGroup(host, {
+                label: 'Extract Business Keys',
+                icon: '🗂',
+                defaultOptionId: 'csv',
+                options: [
+                    { id: 'csv', label: 'As CSV (Default)', onSelect: copyBusinessKeysAsCsv },
+                    { id: 'table', label: 'As Table', onSelect: copyBusinessKeysAsTab },
+                    { id: 'list', label: 'As List', onSelect: copyBusinessKeysAsList }
+                ]
+            });
+
+            const startupInfoGroup = addActionGroup(host, {
+                label: 'Extract Startup Info',
+                icon: '🚀',
+                defaultOptionId: 'bukeys',
+                options: [
+                    { id: 'bukeys', label: 'As BuKeys (Default)', onSelect: copyStartupBuKeys },
+                    { id: 'csv', label: 'As CSV', onSelect: copyStartupBuKeysAsCsv },
+                    { id: 'elastic', label: 'As Elastic query', onSelect: copyElastic }
+                ]
+            });
+
+            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup].filter(Boolean);
 
             if (!buttons.length) {
                 return;
