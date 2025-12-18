@@ -20,7 +20,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * The helper now captures every business key present in the selected rows instead of stopping at `_MSGID`.
 
 * Extract Startup Info
-  * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys.
+  * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys with line feeds between records.
   * Further options: **As CSV** (quoted, `;` separated) and **As Elastic query** (mirrors the former "Copy Startup for Elastic" output).
   * The cancellable progress toast remains in place while opening each row's Startup window.
 
