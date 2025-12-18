@@ -17,7 +17,7 @@
             buttonParent: '.header-holder',
             body: 'body',
             rows: '.scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)',
-            msgIdCells: '.div[aria-hidden="false"] .mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell',
+            msgIdCells: 'div:not([aria-hidden="true"]) .mTable-row-hover .mTable-data-cell,     div:not([aria-hidden="true"]) .mTable-row-selected .mTable-data-cell',
             processNameCell: 'td:nth-child(6)',
             contextMenuItems: '.contextMenuPopup td.menuItem',
             popup: '.gwt-DecoratedPopupPanel',
