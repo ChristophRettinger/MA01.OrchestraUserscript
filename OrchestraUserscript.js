@@ -41,7 +41,7 @@
             processesHash: /#scenario\/.*\/processes\//
         },
         panel: {
-            width: 240,
+            width: 275,
             headerText: 'Orchestra Tools',
             collapsedIcon: '🛠',
             collapsedSize: 26,
@@ -651,7 +651,7 @@
                     borderRadius: '0',
                     margin: '0'
                 });
-                this.toggleButton.textContent = `[-] ${CONFIG.panel.headerText}`;
+                this.toggleButton.textContent = `${CONFIG.panel.headerText}`;
             } else {
                 applyStyles(this.wrapper, {
                     width: collapsedSizePx,
@@ -1524,7 +1524,7 @@
                 icon: '🔎',
                 defaultOptionId: 'selection',
                 options: [
-                    { id: 'selection', label: 'From selection (Default)', onSelect: searchMsgIdFromSelection },
+                    { id: 'selection', label: 'From selection', onSelect: searchMsgIdFromSelection },
                     { id: 'clipboard', label: 'From clipboard', onSelect: searchMsgIdFromClipboard }
                 ]
             });
@@ -1534,7 +1534,7 @@
                 icon: '📋',
                 defaultOptionId: 'csv',
                 options: [
-                    { id: 'csv', label: 'As CSV (Default)', onSelect: copyMsgIdsAsCsv },
+                    /*{ id: 'csv', label: 'As CSV', onSelect: copyMsgIdsAsCsv },*/
                     { id: 'table', label: 'As Table', onSelect: copyMsgIdsAsTab },
                     { id: 'list', label: 'As List', onSelect: copyMsgIdsAsList },
                     { id: 'elastic', label: 'As Elastic search', onSelect: copyMsgIdsAsElastic }
@@ -1544,10 +1544,10 @@
 
             const businessKeysGroup = addActionGroup(host, {
                 label: 'Extract Business Keys',
-                icon: '🗂',
+                icon: '🔑',
                 defaultOptionId: 'csv',
                 options: [
-                    { id: 'csv', label: 'As CSV (Default)', onSelect: copyBusinessKeysAsCsv },
+                    { id: 'csv', label: 'As CSV', onSelect: copyBusinessKeysAsCsv },
                     { id: 'table', label: 'As Table', onSelect: copyBusinessKeysAsTab },
                     { id: 'list', label: 'As List', onSelect: copyBusinessKeysAsList }
                 ]
@@ -1555,10 +1555,10 @@
 
             const startupInfoGroup = addActionGroup(host, {
                 label: 'Extract Startup Info',
-                icon: '🚀',
+                icon: '↪',
                 defaultOptionId: 'bukeys',
                 options: [
-                    { id: 'bukeys', label: 'As BuKeys (Default)', onSelect: copyStartupBuKeys },
+                    { id: 'bukeys', label: 'As BuKeys', onSelect: copyStartupBuKeys },
                     { id: 'csv', label: 'As CSV', onSelect: copyStartupBuKeysAsCsv },
                     { id: 'elastic', label: 'As Elastic query', onSelect: copyElastic }
                 ]
