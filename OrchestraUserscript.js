@@ -15,6 +15,7 @@
     const CONFIG = {
         selectors: {
             buttonParent: '.header-holder',
+            body: 'body',
             rows: '.scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)',
             msgIdCells: '.mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell',
             processNameCell: 'td:nth-child(6)',
@@ -25,7 +26,7 @@
             selectedTabLabel: '.mTabCaption-selected .mTabCaption-label',
             businessViewTabItems: '.gwt-TabBarItem',
             businessViewTabLabel: '.mTabCaption-label',
-            businessViewTextBoxes: '.mListBox-textBox',
+            businessViewTextBoxes: 'tr:nth-child(4) .mListBox-textBox',
             businessViewListRows: 'tr.mListBox-list-row > td',
             businessViewAddButton: "img.img[src='images/add.png']",
             businessViewRemoveButton: "img.img[src='images/remove.png']",
@@ -336,16 +337,9 @@
             await delay(100);
         }
 
-        const closeBusinessViewDropdown = () => {
-            const dialogTable = document.querySelector('.dialogTable');
-            if (dialogTable) {
-                dispatchMouseClick(dialogTable);
-            }
-        };
-
         const keySelectors = getBusinessViewTextBoxes();
         const keyBox = keySelectors.find((element) => {
-            const text = normalizeText(element.textContent);
+            const text = element.textContent;
             return BUSINESS_KEY_PLACEHOLDERS.some((placeholder) => text.includes(placeholder)) || MSGID_LABELS.includes(text);
         }) ?? keySelectors[0];
 
@@ -353,22 +347,14 @@
             return false;
         }
 
-        dispatchMouseClick(keyBox);
-        await delay(100);
-        const currentKey = normalizeText(keyBox.textContent);
-        const keySelected = selectBusinessViewOption(MSGID_LABELS) || MSGID_LABELS.includes(currentKey);
-        closeBusinessViewDropdown();
-
-        const connector = getBusinessViewTextBoxes().find((element) => {
-            const text = normalizeText(element.textContent);
-            return CONNECTOR_AND_LABELS.includes(text);
-        });
-
-        if (connector) {
-            dispatchMouseClick(connector);
+        const currentKey = keyBox.textContent;
+        let keySelected = MSGID_LABELS.includes(currentKey);
+        if (!keySelected){
+            dispatchMouseClick(keyBox);
             await delay(100);
-            selectBusinessViewOption(CONNECTOR_OR_LABELS) || selectFirstAvailableBusinessOption();
-            closeBusinessViewDropdown();
+            keySelected= selectBusinessViewOption(MSGID_LABELS);
+            dispatchMouseClick(document.body);
+            await delay(100);
         }
 
         const inputs = Array.from(document.querySelectorAll(CONFIG.selectors.businessViewInputs));
@@ -379,8 +365,8 @@
         inputs.forEach((input) => {
             input.focus();
             input.value = msgId;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         });
 
         return keySelected;
