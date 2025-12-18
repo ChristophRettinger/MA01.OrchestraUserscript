@@ -17,7 +17,7 @@
             buttonParent: '.header-holder',
             body: 'body',
             rows: '.scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)',
-            msgIdCells: '.mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell',
+            msgIdCells: '.div[aria-hidden="false"] .mTable-row-hover .mTable-data-cell, .mTable-row-selected .mTable-data-cell',
             processNameCell: 'td:nth-child(6)',
             contextMenuItems: '.contextMenuPopup td.menuItem',
             popup: '.gwt-DecoratedPopupPanel',
@@ -1076,6 +1076,11 @@
         if (collectSelectedMsgIds().length > 0) {
             return true;
         }
+
+        if (getSelectedRows().length > 0) {
+            return true;
+        }
+
         return collectScenarioDetailMsgIds().length > 0;
     };
 
