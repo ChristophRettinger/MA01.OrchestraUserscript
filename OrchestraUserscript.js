@@ -41,14 +41,14 @@
             processesHash: /#scenario\/.*\/processes\//
         },
         panel: {
-            width: 200,
+            width: 240,
             headerText: 'Orchestra Tools',
             collapsedIcon: '🛠',
             collapsedSize: 26,
             zIndex: 2147483647
         },
         colors: {
-            buttonEnabled: '#A9D0F5',
+            buttonEnabled: '#cbe5ff',
             buttonDisabled: '#d6d6d6'
         },
         toast: {
@@ -711,6 +711,11 @@
             }
 
             const labelSpan = createElement('span', { textContent: label });
+            applyStyles(labelSpan, {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+            });
             button.appendChild(labelSpan);
 
             let enabled = false;
@@ -782,7 +787,7 @@
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                justifyContent: 'space-between',
+                justifyContent: 'flex-start',
                 fontFamily: 'inherit',
                 fontSize: '12px',
                 flex: '1'
@@ -791,9 +796,11 @@
             const labelWrapper = createElement('div');
             applyStyles(labelWrapper, {
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: '2px'
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                minWidth: '0'
             });
 
             if (icon) {
@@ -808,11 +815,19 @@
             }
 
             const labelSpan = createElement('span', { textContent: label });
+            applyStyles(labelSpan, {
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+            });
             labelWrapper.appendChild(labelSpan);
             const defaultLabelSpan = createElement('span', { textContent: '' });
             applyStyles(defaultLabelSpan, {
                 fontSize: '11px',
-                color: '#424242'
+                color: '#424242',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
             });
             labelWrapper.appendChild(defaultLabelSpan);
             mainButton.appendChild(labelWrapper);
@@ -851,7 +866,7 @@
 
             const setDefaultOption = (option) => {
                 currentDefault = option;
-                defaultLabelSpan.textContent = option?.label || '';
+                defaultLabelSpan.textContent = option?.label ? `(${option.label})` : '';
             };
 
             const closeDropdown = () => {
@@ -901,7 +916,8 @@
                     borderRadius: '2px',
                     fontFamily: 'inherit',
                     fontSize: '12px',
-                    background: '#f5f5f5'
+                    background: '#f5f5f5',
+                    whiteSpace: 'nowrap'
                 });
                 optionButton.addEventListener('click', (event) => {
                     event.stopPropagation();
@@ -1429,7 +1445,8 @@
                 showToast('No BuKeys found for the current rows.', { type: 'warning' });
                 return;
             }
-            await navigator.clipboard.writeText(normalizedKeys.join(','));
+            // Keep each record on its own line to simplify downstream pasting.
+            await navigator.clipboard.writeText(normalizedKeys.join('\n'));
             const label = pluralize('BuKey', normalizedKeys.length);
             showToast(`Copied ${normalizedKeys.length} ${label} to the clipboard.`, { type: 'success' });
         } catch (error) {
