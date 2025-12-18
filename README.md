@@ -4,26 +4,25 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 
 ## Functions
 
-* Get Startup BuKeys:
-  Opens up the startup information from all processes on current page and extracts the BuKeys string.
-  A cancellable progress toast keeps track of the processed rows so you can stop the run at any time.
-  The helper copies the joined BuKeys to the clipboard and shows a toast summarising the number of keys processed.
-
-* Get Startup BuKeys (Elastic)
-  Opens up the startup information from all processes on current page and extracts the BuKeys string. The result is convertet to an Elastic query to find the origin processes.
-  The cancellable progress toast is reused so you can interrupt the data gathering.
-  A success toast confirms the copy action and references how many keys were included; warnings appear when no usable keys were found.
+* Search by MSGID
+  * Default action: **From selection** – reuses the selected row's MSGID to prepare and trigger the Business view search.
+  * Dropdown option: **From clipboard** – pulls the MSGID from your clipboard before running the Business view search.
+  * The helper clears stale Business view filters, fills the MSGID filter, and tries to keep the clipboard in sync with the searched value.
 
 * Copy MSGIDs
-  Copies `_MSGID` values from hovered or selected rows or the currently opened scenario detail window.
-  The helper surfaces a toast referencing the source that was used and informs when no usable IDs are available.
-  Duplicate MSGIDs are removed automatically so clipboard contents stay clean when multiple widgets expose the same value.
+  * Default action: **As CSV** – copies the selected rows' MSGIDs with a `MSGID` header and line-feed separated rows.
+  * Further options: **As Table** (tab separated), **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
+  * Duplicate MSGIDs are still removed automatically so each list stays tidy.
 
-* Search MSGID in Business view
-  Opens the Business view tab, prepares the MSGID filters, pastes the resolved MSGID, and triggers the search button.
-  The helper now exclusively uses MSGIDs from the currently selected rows and issues a toast describing the search parameters.
-  Duplicate MSGIDs are removed from the selected rows before the search so the Business view is queried only once per value.
-  Existing Business view filters are cleared automatically and replaced with a single MSGID filter configured from the first available ID so stale conditions cannot affect the search.
+* Extract Business Keys
+  * Default action: **As CSV** – extracts all visible business keys from the selected rows and exports them as `;` separated CSV with quotes when needed.
+  * Further options: **As Table** (tab separated, unquoted) and **As List** (one comma-separated list per business key).
+  * The helper now captures every business key present in the selected rows instead of stopping at `_MSGID`.
+
+* Extract Startup Info
+  * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys.
+  * Further options: **As CSV** (quoted, `;` separated) and **As Elastic query** (mirrors the former "Copy Startup for Elastic" output).
+  * The cancellable progress toast remains in place while opening each row's Startup window.
 
 ## Availability
 
@@ -31,7 +30,9 @@ The helper buttons become active only on the process overview page (`#scenario/p
 
 ## Helper Panel
 
-The buttons are grouped inside a collapsible panel pinned to the top right of the header. The panel now starts collapsed so the "Orchestra Tools" controls stay out of the way by default. When collapsed the toggle button shows a circular icon with a white background and black border to keep it visible against the page chrome. Expanding the panel restores the full header with button list. Each helper now shows a leading icon so actions are easier to spot at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
+The buttons live inside a collapsible panel pinned to the top right of the header. The panel now starts collapsed so the "Orchestra Tools" controls stay out of the way by default. When collapsed the toggle button shows a circular icon with a white background and black border to keep it visible against the page chrome. Expanding the panel restores the full header with button list.
+
+Actions are grouped into split buttons: the main button triggers the default behaviour while the adjacent ellipsis opens a dropdown with every available format. Icons remain in place to keep each action recognizable at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
 
 ## Development Notes
 
