@@ -13,6 +13,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * Default action: **As CSV** – copies the selected rows' MSGIDs with a `MSGID` header and line-feed separated rows.
   * Further options: **As Table** (tab separated), **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
   * Duplicate MSGIDs are still removed automatically so each list stays tidy.
+  * Selecting multiple rows keeps the helper enabled so you can export MSGIDs from every highlighted row at once.
 
 * Extract Business Keys
   * Default action: **As CSV** – extracts all visible business keys from the selected rows and exports them as `;` separated CSV with quotes when needed.
