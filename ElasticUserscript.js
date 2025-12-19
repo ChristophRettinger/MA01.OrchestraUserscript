@@ -72,6 +72,42 @@
     /** Utility helper that waits for a number of milliseconds. */
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+    /**
+     * Waits until an element matching the selector appears in the DOM.
+     * Resolves with the element so callers can ensure Elastic finished rendering
+     * its shell before wiring up the helper overlay.
+     */
+    function waitForElement(selector, { timeoutMs = 20000 } = {}) {
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector(selector);
+            if (existing) {
+                resolve(existing);
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                const found = document.querySelector(selector);
+                if (found) {
+                    observer.disconnect();
+                    if (timeoutId !== null) {
+                        window.clearTimeout(timeoutId);
+                    }
+                    resolve(found);
+                }
+            });
+
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+
+            const timeoutId =
+                Number.isFinite(timeoutMs) && timeoutMs > 0
+                    ? window.setTimeout(() => {
+                          observer.disconnect();
+                          reject(new Error(`Timed out waiting for selector: ${selector}`));
+                      }, timeoutMs)
+                    : null;
+        });
+    }
+
     /** Applies multiple style definitions to the provided element. */
     function applyStyles(element, ...styles) {
         styles.filter(Boolean).forEach((style) => Object.assign(element.style, style));
@@ -309,7 +345,7 @@
             applyStyles(this.wrapper, {
                 position: 'fixed',
                 top: '8px',
-                right: '8px',
+                right: '80px',
                 zIndex: String(CONFIG.layout.zIndex),
                 fontFamily: 'inherit',
                 fontSize: '12px'
@@ -651,11 +687,24 @@
     }
 
     function init() {
-        initializeOverlay();
+        waitForElement('.kibana-body')
+            .then(() => initializeOverlay())
+            .catch((error) => {
+                console.warn(
+                    '[ElasticUserscript] kibana-body container not detected; helper overlay not created.',
+                    error
+                );
+            });
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init, { once: true });
+        document.addEventListener(
+            'DOMContentLoaded',
+            () => {
+                init();
+            },
+            { once: true }
+        );
     } else {
         init();
     }
