@@ -586,7 +586,7 @@
                 // Keep the helper panel above modal overlays such as the scenario detail window.
                 position: 'absolute',
                 top: '5px',
-                right: '50px',
+                right: '5px',
                 zIndex: String(CONFIG.panel.zIndex),
                 fontFamily: 'inherit',
                 fontSize: '12px'
