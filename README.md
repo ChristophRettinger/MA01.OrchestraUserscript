@@ -42,7 +42,9 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 
 ## Elastic MessageData Copier
 
-`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/`. As soon as the standard "Copy to clipboard" action becomes available, the script adds an adjacent helper button titled "Copy MessageData to clipboard". Clicking the helper first triggers the built-in copy functionality and then replaces the clipboard contents with the `MessageData1` field extracted from the copied JSON payload. The helper retries clipboard access a few times to account for Elastic's asynchronous updates and logs success or error details to the browser console.
+`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/` with a floating overlay similar to the Orchestra helper panel. Open a detail drawer and the overlay (top right) exposes a grouped split button for MessageData actions:
 
-The helper button mirrors Elastic's original SVG icon, ensuring visual consistency while inserting an extra 20 px gap between both buttons so the new action is easier to spot. After the clipboard update succeeds, a toast notification adapted from the Orchestra script confirms that the `MessageData1` field has been copied.
-To cope with Elastic's in-place navigation, the helper automatically re-attaches itself when the detail drawer refreshes so the additional action stays available for every record you inspect.
+* Default action: **Format XML + copy** – triggers Elastic's native copy, extracts `MessageData1`, formats it with indentation, and replaces the clipboard content.
+* Dropdown option: **Copy raw MessageData** – same workflow but leaves the XML untouched.
+
+The overlay keeps a very high z-index so it remains visible above Elastic modals and auto-disables when the page has no visible copy button. Feedback toasts mirror the Orchestra styling to confirm each copy.
