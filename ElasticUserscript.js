@@ -299,42 +299,26 @@
 
     /** Formats XML content with consistent indentation. */
     function formatXml(xmlString) {
-        if (typeof xmlString !== 'string') {
-            throw new TypeError('MessageData must be a string to format XML.');
-        }
+        var xmlDoc = new DOMParser().parseFromString(xmlString, 'application/xml');
+		var xsltDoc = new DOMParser().parseFromString([
+			// describes how we want to modify the XML - indent everything
+			'<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform">',
+			'  <xsl:strip-space elements="*"/>',
+			'  <xsl:template match="para[content-style][not(text())]">', // change to just text() to strip space in text nodes
+			'    <xsl:value-of select="normalize-space(.)"/>',
+			'  </xsl:template>',
+			'  <xsl:template match="node()|@*">',
+			'    <xsl:copy><xsl:apply-templates select="node()|@*"/></xsl:copy>',
+			'  </xsl:template>',
+			'  <xsl:output indent="yes"/>',
+			'</xsl:stylesheet>',
+		].join('\n'), 'application/xml');
 
-        const trimmed = xmlString.trim();
-        if (!trimmed) {
-            throw new Error('MessageData is empty.');
-        }
-
-        const parser = new DOMParser();
-        const parsed = parser.parseFromString(trimmed, 'application/xml');
-        const parseError = parsed.querySelector('parsererror');
-        if (parseError) {
-            throw new Error('MessageData is not valid XML.');
-        }
-
-        const serializer = new XMLSerializer();
-        const serialized = serializer.serializeToString(parsed);
-        const tokens = serialized.replace(/(>)(<)(\/?)/g, '$1\n$2$3').split(/\n+/);
-        const indentUnit = '  ';
-        let indent = 0;
-        const lines = tokens
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => {
-                if (/^<\//.test(line)) {
-                    indent = Math.max(indent - 1, 0);
-                }
-                const currentIndent = indentUnit.repeat(indent);
-                if (/^<[^!?][^>/]*[^/]?>$/.test(line)) {
-                    indent += 1;
-                }
-                return `${currentIndent}${line}`;
-            });
-
-        return lines.join('\n');
+		var xsltProcessor = new XSLTProcessor();    
+		xsltProcessor.importStylesheet(xsltDoc);
+		var resultDoc = xsltProcessor.transformToDocument(xmlDoc);
+		var resultXml = new XMLSerializer().serializeToString(resultDoc);
+		return resultXml;
     }
 
     /**
