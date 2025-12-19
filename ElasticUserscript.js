@@ -2,7 +2,7 @@
 // @name         Elastic Helper Functions
 // @namespace    http://tampermonkey.net/
 // @version      2025-10-22
-// @description  Adds a helper overlay for copying the MessageData1 field from the Elastic page clipboard JSON.
+// @description  Adds a helper overlay for copying MessageData fields from the Elastic page clipboard JSON.
 // @author       Christoph Rettinger
 // @match        https://kb-obs.apps.zeus.wien.at/app/*
 // @run-at       document-idle
@@ -30,10 +30,14 @@
         labels: {
             /** Default label for the helper overlay toggle. */
             panelHeader: 'Elastic Tools',
-            /** Label for the formatted MessageData action. */
-            copyFormatted: 'Format XML + copy',
-            /** Label for the raw MessageData action. */
-            copyRaw: 'Copy raw MessageData',
+            /** Label for the MessageData1 action. */
+            messageData1: 'Get MessageData1',
+            /** Label for the MessageData2 action. */
+            messageData2: 'Get MessageData2',
+            /** Label for the formatted option. */
+            formatted: 'formatted',
+            /** Label for the raw option. */
+            raw: 'raw',
             /** Busy label shown while clipboard operations run. */
             helperBusy: 'Copying MessageData…'
         },
@@ -258,10 +262,10 @@
     const showToast = (...args) => toastService.show(...args);
 
     /**
-     * Reads the clipboard and extracts the MessageData1 field.
+     * Reads the clipboard and extracts the requested MessageData field.
      * Retries a couple of times to give Elastic time to populate the clipboard.
      */
-    async function readMessageDataFromClipboard() {
+    async function readMessageDataFromClipboard(fieldName = 'MessageData1') {
         let lastError;
         for (let attempt = 1; attempt <= CONFIG.clipboardReadAttempts; attempt += 1) {
             await delay(CONFIG.clipboardReadDelayMs);
@@ -278,17 +282,17 @@
                     lastError = new Error('Clipboard does not contain valid JSON');
                     continue;
                 }
-                const messageData = parsed?._source?.MessageData1 ?? parsed?.fields?.MessageData1?.[0];
+                const messageData = parsed?._source?.[fieldName] ?? parsed?.fields?.[fieldName]?.[0];
                 if (messageData) {
                     return messageData;
                 }
-                lastError = new Error('MessageData1 field missing in clipboard JSON');
+                lastError = new Error(`${fieldName} field missing in clipboard JSON`);
             } catch (readError) {
                 lastError = readError;
             }
         }
         if (lastError) {
-            console.error('[ElasticUserscript] Unable to extract MessageData1 from clipboard.', lastError);
+            console.error(`[ElasticUserscript] Unable to extract ${fieldName} from clipboard.`, lastError);
         }
         return null;
     }
@@ -331,6 +335,35 @@
             });
 
         return lines.join('\n');
+    }
+
+    /**
+     * Formats MessageData content by detecting JSON or XML payloads.
+     * Prefers JSON when valid, otherwise falls back to XML pretty-printing.
+     */
+    function formatMessageData(messageData) {
+        if (typeof messageData !== 'string') {
+            throw new TypeError('MessageData must be a string.');
+        }
+
+        const trimmed = messageData.trim();
+        if (!trimmed) {
+            throw new Error('MessageData is empty.');
+        }
+
+        try {
+            const parsedJson = JSON.parse(trimmed);
+            return JSON.stringify(parsedJson, null, 2);
+        } catch {
+            // Not JSON, fall back to XML.
+        }
+
+        try {
+            return formatXml(trimmed);
+        } catch (xmlError) {
+            const reason = xmlError instanceof Error ? xmlError.message : 'Unknown error';
+            throw new Error(`MessageData is neither valid JSON nor XML. (${reason})`);
+        }
     }
 
     /**
@@ -639,7 +672,7 @@
         return null;
     }
 
-    async function copyMessageData({ formatXml: shouldFormat = true } = {}) {
+    async function copyMessageData({ fieldName = 'MessageData1', formatContent = true } = {}) {
         const copyButton = findCopyButton();
         if (!copyButton) {
             showToast('Open a MessageData detail first. Copy button not found.', { type: 'error' });
@@ -647,20 +680,22 @@
         }
 
         copyButton.click();
-        const messageData = await readMessageDataFromClipboard();
+        const messageData = await readMessageDataFromClipboard(fieldName);
         if (!messageData) {
-            showToast('MessageData1 not available in the clipboard payload.', { type: 'warning' });
+            showToast(`${fieldName} not available in the clipboard payload.`, { type: 'warning' });
             return;
         }
 
         try {
-            const content = shouldFormat ? formatXml(messageData) : messageData;
+            const content = formatContent ? formatMessageData(messageData) : messageData;
             await navigator.clipboard.writeText(content);
-            const label = shouldFormat ? 'Formatted MessageData copied.' : 'Raw MessageData copied.';
+            const formattedLabel = `${fieldName} copied (${CONFIG.labels.formatted}).`;
+            const rawLabel = `${fieldName} copied (${CONFIG.labels.raw}).`;
+            const label = formatContent ? formattedLabel : rawLabel;
             showToast(label, { type: 'success' });
         } catch (error) {
-            console.error('[ElasticUserscript] Failed to process MessageData1.', error);
-            showToast(error?.message || 'Unable to copy MessageData1.', { type: 'error' });
+            console.error(`[ElasticUserscript] Failed to process ${fieldName}.`, error);
+            showToast(error?.message || `Unable to copy ${fieldName}.`, { type: 'error' });
         }
     }
 
@@ -671,12 +706,22 @@
         }
 
         const messageDataGroup = panel.addActionGroup({
-            label: CONFIG.labels.copyFormatted,
+            label: CONFIG.labels.messageData1,
             icon: '📋',
             defaultOptionId: 'formatted',
             options: [
-                { id: 'formatted', label: CONFIG.labels.copyFormatted, onSelect: () => copyMessageData({ formatXml: true }) },
-                { id: 'raw', label: CONFIG.labels.copyRaw, onSelect: () => copyMessageData({ formatXml: false }) }
+                { id: 'formatted', label: CONFIG.labels.formatted, onSelect: () => copyMessageData({ fieldName: 'MessageData1', formatContent: true }) },
+                { id: 'raw', label: CONFIG.labels.raw, onSelect: () => copyMessageData({ fieldName: 'MessageData1', formatContent: false }) }
+            ]
+        });
+
+        const messageData2Group = panel.addActionGroup({
+            label: CONFIG.labels.messageData2,
+            icon: '📋',
+            defaultOptionId: 'formatted',
+            options: [
+                { id: 'formatted', label: CONFIG.labels.formatted, onSelect: () => copyMessageData({ fieldName: 'MessageData2', formatContent: true }) },
+                { id: 'raw', label: CONFIG.labels.raw, onSelect: () => copyMessageData({ fieldName: 'MessageData2', formatContent: false }) }
             ]
         });
 
@@ -684,6 +729,7 @@
         // is not present the handler will surface a toast that explains the missing
         // prerequisites without hiding the controls.
         messageDataGroup.setEnabled(true);
+        messageData2Group.setEnabled(true);
     }
 
     function init() {
