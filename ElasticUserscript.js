@@ -18,8 +18,6 @@
      */
     const CONFIG = {
         selectors: {
-            /** Selector that matches the SVG icon of the Elastic copy button. */
-            copyIcon: 'svg[data-icon-type="copyClipboard"]',
             /** Class applied to the container span inside EUI empty buttons. */
             buttonContent: '.euiButtonEmpty__content',
             /** Class applied to the icon span of the Elastic button. */
@@ -38,6 +36,8 @@
             formatted: 'formatted',
             /** Label for the raw option. */
             raw: 'raw',
+            /** Visible label of the Elastic "Copy to clipboard" button. */
+            copyButton: 'Copy to clipboard',
             /** Busy label shown while clipboard operations run. */
             helperBusy: 'Copying MessageData…'
         },
@@ -645,11 +645,19 @@
 
     const isVisible = (element) => Boolean(element && element.getClientRects().length > 0);
 
+    // Elastic swapped the copy icon, so we now resolve the button by its visible label instead of the SVG.
     function findCopyButton() {
-        const icons = document.querySelectorAll(CONFIG.selectors.copyIcon);
-        for (const icon of icons) {
-            const button = icon.closest('button');
-            if (button && isVisible(button)) {
+        const buttons = document.querySelectorAll('button');
+        for (const button of buttons) {
+            if (!isVisible(button)) {
+                continue;
+            }
+
+            const label =
+                button.querySelector(CONFIG.selectors.buttonText)?.textContent?.trim() ||
+                button.textContent?.trim();
+
+            if (label === CONFIG.labels.copyButton) {
                 return button;
             }
         }
