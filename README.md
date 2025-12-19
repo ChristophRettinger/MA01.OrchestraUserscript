@@ -47,4 +47,4 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 * Default action: **Format XML + copy** – triggers Elastic's native copy, extracts `MessageData1`, formats it with indentation, and replaces the clipboard content.
 * Dropdown option: **Copy raw MessageData** – same workflow but leaves the XML untouched.
 
-The overlay keeps a very high z-index so it remains visible above Elastic modals and auto-disables when the page has no visible copy button. Feedback toasts mirror the Orchestra styling to confirm each copy.
+The overlay keeps a very high z-index so it remains visible above Elastic modals, and the MessageData controls stay enabled at all times. If Elastic's copy button is not present, the helper surfaces a toast to explain the missing prerequisite. Feedback toasts mirror the Orchestra styling to confirm each copy.

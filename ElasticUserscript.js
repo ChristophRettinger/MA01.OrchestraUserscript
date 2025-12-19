@@ -409,7 +409,7 @@
             }
         }
 
-        addActionGroup({ label, icon, options, defaultOptionId, isActionAvailable }) {
+        addActionGroup({ label, icon, options, defaultOptionId }) {
             if (!Array.isArray(options) || options.length === 0) {
                 throw new Error('Action groups require at least one option.');
             }
@@ -553,7 +553,6 @@
             let enabled = false;
             const controller = {
                 element: host,
-                isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
                 setEnabled(value) {
                     enabled = Boolean(value);
                     const baseStyles = {
@@ -578,7 +577,7 @@
                 }
             };
 
-            controller.setEnabled(false);
+            controller.setEnabled(true);
             return controller;
         }
     }
@@ -603,8 +602,6 @@
         }
         return null;
     }
-
-    const hasCopyButton = () => Boolean(findCopyButton());
 
     async function copyMessageData({ formatXml: shouldFormat = true } = {}) {
         const copyButton = findCopyButton();
@@ -644,22 +641,13 @@
             options: [
                 { id: 'formatted', label: CONFIG.labels.copyFormatted, onSelect: () => copyMessageData({ formatXml: true }) },
                 { id: 'raw', label: CONFIG.labels.copyRaw, onSelect: () => copyMessageData({ formatXml: false }) }
-            ],
-            isActionAvailable: hasCopyButton
+            ]
         });
 
-        const updateAvailability = () => {
-            const enabled = hasCopyButton();
-            messageDataGroup.setEnabled(enabled);
-        };
-
-        window.addEventListener('focus', updateAvailability);
-        document.addEventListener('visibilitychange', updateAvailability);
-
-        const observer = new MutationObserver(updateAvailability);
-        observer.observe(document.body || document.documentElement, { childList: true, subtree: true, attributes: true });
-
-        updateAvailability();
+        // The MessageData helpers remain enabled at all times. If Elastic's copy button
+        // is not present the handler will surface a toast that explains the missing
+        // prerequisites without hiding the controls.
+        messageDataGroup.setEnabled(true);
     }
 
     function init() {
