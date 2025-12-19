@@ -345,7 +345,7 @@
             applyStyles(this.wrapper, {
                 position: 'fixed',
                 top: '8px',
-                right: '80px',
+                right: '125px',
                 zIndex: String(CONFIG.layout.zIndex),
                 fontFamily: 'inherit',
                 fontSize: '12px'
@@ -687,7 +687,7 @@
     }
 
     function init() {
-        waitForElement('.kibana-body')
+        waitForElement('#kibana-body')
             .then(() => initializeOverlay())
             .catch((error) => {
                 console.warn(
