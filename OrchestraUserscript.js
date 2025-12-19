@@ -51,7 +51,11 @@
         },
         colors: {
             buttonEnabled: '#cbe5ff',
-            buttonDisabled: '#d6d6d6'
+            buttonDisabled: '#d6d6d6',
+            toggleExpanded: '#1565c0',
+            toggleExpandedText: '#ffffff',
+            toggleCollapsed: '#eceff1',
+            toggleCollapsedText: '#111111'
         },
         toast: {
             defaultDurationMs: 3500,
@@ -582,7 +586,7 @@
                 // Keep the helper panel above modal overlays such as the scenario detail window.
                 position: 'absolute',
                 top: '5px',
-                right: '5px',
+                right: '50px',
                 zIndex: String(CONFIG.panel.zIndex),
                 fontFamily: 'inherit',
                 fontSize: '12px'
@@ -643,7 +647,8 @@
                     boxShadow: 'none'
                 });
                 applyStyles(this.toggleButton, {
-                    background: '#bdbdbd',
+                    background: CONFIG.colors.toggleExpanded,
+                    color: CONFIG.colors.toggleExpandedText,
                     border: '1px solid black',
                     padding: '2px 4px',
                     fontSize: '12px',
@@ -653,7 +658,7 @@
                     borderRadius: '0',
                     margin: '0'
                 });
-                this.toggleButton.textContent = `${CONFIG.panel.headerText}`;
+                this.toggleButton.textContent = CONFIG.panel.collapsedIcon;
             } else {
                 applyStyles(this.wrapper, {
                     width: collapsedSizePx,
@@ -665,7 +670,8 @@
                     boxShadow: 'none'
                 });
                 applyStyles(this.toggleButton, {
-                    background: '#ffffff',
+                    background: CONFIG.colors.toggleCollapsed,
+                    color: CONFIG.colors.toggleCollapsedText,
                     border: 'none',
                     padding: '0',
                     margin: '-2px 0 0 0',
