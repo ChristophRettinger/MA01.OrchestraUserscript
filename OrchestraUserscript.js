@@ -5,6 +5,7 @@
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
+// @match        https://esbt.wien.gv.at:*/orchestra/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=wien.at
 // @grant        none
 // ==/UserScript==
@@ -17,7 +18,8 @@
             buttonParent: '.header-holder',
             body: 'body',
             rows: '.scenarioChooser-content .mTable-data > tbody > tr:not(:first-child)',
-            msgIdCells: 'div:not([aria-hidden="true"]) .mTable-row-hover .mTable-data-cell,     div:not([aria-hidden="true"]) .mTable-row-selected .mTable-data-cell',
+            msgIdCells: 'div.gwt-TabPanelBottom>div:not([aria-hidden="true"]) .mTable-row-hover .mTable-data-cell,     div.gwt-TabPanelBottom>div:not([aria-hidden="true"]) .mTable-row-selected .mTable-data-cell',
+            msgIdRows: 'div.gwt-TabPanelBottom>div:not([aria-hidden="true"]) .mTable-row-hover,     div.gwt-TabPanelBottom>div:not([aria-hidden="true"]) .mTable-row-selected',
             processNameCell: 'td:nth-child(6)',
             contextMenuItems: '.contextMenuPopup td.menuItem',
             popup: '.gwt-DecoratedPopupPanel',
@@ -1094,16 +1096,11 @@
         return [];
     }
 
-    const getSelectedRows = () => {
-        const selectors = ['.mTable-row-hover', '.mTable-row-selected'];
-        return ensureUniqueValues(
-            selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))
-        );
-    };
+    const getSelectedRows = () => Array.from(document.querySelectorAll(CONFIG.selectors.msgIdRows));
 
     // Business key values are embedded in a single cell as "Key: Value, Other_Key: Value" with values that may contain commas or colons.
     // Keys start with an underscore or uppercase letter and always include at least one underscore.
-    const BUSINESS_KEY_PATTERN = /([A-Z_][A-Za-z0-9.-]*_[A-Za-z0-9.-]*)\s*:\s*/g;
+    const BUSINESS_KEY_PATTERN = /(_[A-Z_][A-Z0-9_]*|[A-Z]+_[a-z0-9_]+): */g;
 
     const findMsgIdCell = (row) => {
         if (!row) {
@@ -1568,20 +1565,20 @@
                 icon: '🔎',
                 defaultOptionId: 'selection',
                 options: [
-                    { id: 'selection', label: 'From selection', onSelect: searchMsgIdFromSelection },
-                    { id: 'clipboard', label: 'From clipboard', onSelect: searchMsgIdFromClipboard }
+                    { id: 'selection', label: 'from selection', onSelect: searchMsgIdFromSelection },
+                    { id: 'clipboard', label: 'from clipboard', onSelect: searchMsgIdFromClipboard }
                 ]
             });
 
             const copyMsgIdsGroup = addActionGroup(host, {
                 label: 'Copy MSGIDs',
                 icon: '📋',
-                defaultOptionId: 'csv',
+                defaultOptionId: 'table',
                 options: [
+                    { id: 'table', label: 'as table', onSelect: copyMsgIdsAsTab },
                     /*{ id: 'csv', label: 'As CSV', onSelect: copyMsgIdsAsCsv },*/
-                    { id: 'table', label: 'As Table', onSelect: copyMsgIdsAsTab },
-                    { id: 'list', label: 'As List', onSelect: copyMsgIdsAsList },
-                    { id: 'elastic', label: 'As Elastic search', onSelect: copyMsgIdsAsElastic }
+                    { id: 'list', label: 'as list', onSelect: copyMsgIdsAsList },
+                    { id: 'elastic', label: 'as Elastic search', onSelect: copyMsgIdsAsElastic }
                 ],
                 isActionAvailable: hasMsgIdSource
             });
@@ -1589,14 +1586,15 @@
             const businessKeysGroup = addActionGroup(host, {
                 label: 'Extract Business Keys',
                 icon: '🔑',
-                defaultOptionId: 'csv',
+                defaultOptionId: 'table',
                 options: [
-                    { id: 'csv', label: 'As CSV', onSelect: copyBusinessKeysAsCsv },
-                    { id: 'table', label: 'As Table', onSelect: copyBusinessKeysAsTab },
-                    { id: 'list', label: 'As List', onSelect: copyBusinessKeysAsList }
+                    { id: 'table', label: 'as table', onSelect: copyBusinessKeysAsTab },
+                    { id: 'csv', label: 'as CSV', onSelect: copyBusinessKeysAsCsv },
+                    { id: 'list', label: 'as list', onSelect: copyBusinessKeysAsList }
                 ]
             });
 
+            /*
             const startupInfoGroup = addActionGroup(host, {
                 label: 'Extract Startup Info',
                 icon: '↪',
@@ -1607,8 +1605,8 @@
                     { id: 'elastic', label: 'As Elastic query', onSelect: copyElastic }
                 ]
             });
-
-            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup].filter(Boolean);
+            */
+            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup/*, startupInfoGroup*/].filter(Boolean);
 
             if (!buttons.length) {
                 return;
