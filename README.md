@@ -48,3 +48,5 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 * **Get MessageData2** – mirrors the MessageData1 controls but reads the `MessageData2` field from the Elastic copy payload instead.
 
 The overlay keeps a very high z-index so it remains visible above Elastic modals, and the MessageData controls stay enabled at all times. It waits for the main Kibana container (`.kibana-body`) to appear before rendering so the helper only shows once the shell is ready, yet it still anchors to the document body. The floating panel now sits 80px from the right edge to avoid overlapping built-in controls. If Elastic's copy button is not present, the helper surfaces a toast to explain the missing prerequisite. Feedback toasts mirror the Orchestra styling to confirm each copy.
+
+The helper now locates Elastic's copy control by its visible label (**Copy to clipboard**) rather than the SVG icon so it remains compatible with icon updates in Elastic.
