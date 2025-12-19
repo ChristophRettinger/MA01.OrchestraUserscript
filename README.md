@@ -42,9 +42,9 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 
 ## Elastic MessageData Copier
 
-`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/` with a floating overlay similar to the Orchestra helper panel. Open a detail drawer and the overlay (top right) exposes a grouped split button for MessageData actions:
+`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/` with a floating overlay similar to the Orchestra helper panel. Open a detail drawer and the overlay (top right) exposes grouped split buttons for MessageData actions:
 
-* Default action: **Format XML + copy** – triggers Elastic's native copy, extracts `MessageData1`, formats it with indentation, and replaces the clipboard content.
-* Dropdown option: **Copy raw MessageData** – same workflow but leaves the XML untouched.
+* **Get MessageData1** – default option **formatted** auto-detects whether the payload is JSON or XML before pretty-printing and copying it back to the clipboard. The **raw** option keeps the payload untouched.
+* **Get MessageData2** – mirrors the MessageData1 controls but reads the `MessageData2` field from the Elastic copy payload instead.
 
 The overlay keeps a very high z-index so it remains visible above Elastic modals, and the MessageData controls stay enabled at all times. It waits for the main Kibana container (`.kibana-body`) to appear before rendering so the helper only shows once the shell is ready, yet it still anchors to the document body. The floating panel now sits 80px from the right edge to avoid overlapping built-in controls. If Elastic's copy button is not present, the helper surfaces a toast to explain the missing prerequisite. Feedback toasts mirror the Orchestra styling to confirm each copy.
