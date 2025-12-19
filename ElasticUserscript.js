@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Elastic MessageData Copier
+// @name         Elastic Helper Functions
 // @namespace    http://tampermonkey.net/
 // @version      2025-10-22
 // @description  Adds a helper overlay for copying the MessageData1 field from the Elastic page clipboard JSON.
