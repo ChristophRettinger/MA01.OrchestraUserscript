@@ -87,6 +87,8 @@
     const BUSINESS_KEY_PLACEHOLDERS = ['please select a business key', 'bitte wählen sie einen business-schlüssel'];
     const CONNECTOR_AND_LABELS = ['and', 'und'];
     const CONNECTOR_OR_LABELS = ['or', 'oder'];
+    const SCENARIO_NAME_HEADER = 'Scenario name';
+    const PROCESS_NAME_HEADER = 'Process name';
     const MSGID_SOURCE_LABELS = {
         clipboard: 'clipboard',
         selection: 'selected rows',
@@ -763,7 +765,7 @@
             return controller;
         }
 
-        addActionGroup({ label, icon, defaultOptionId, options, isActionAvailable }) {
+        addActionGroup({ label, icon, defaultOptionId, options, isActionAvailable, isEnabled }) {
             if (!Array.isArray(options) || options.length === 0) {
                 throw new TypeError('options must be a non-empty array.');
             }
@@ -951,6 +953,7 @@
             const controller = {
                 element: host,
                 isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
+                isEnabled: typeof isEnabled === 'function' ? isEnabled : null,
                 setEnabled(value) {
                     enabled = Boolean(value);
                     const baseStyles = {
@@ -991,14 +994,32 @@
 
     const isProcessesContext = () => CONFIG.routes.processesHash.test(window.location.hash);
 
-    const hasReadableRows = () => document.querySelectorAll(CONFIG.selectors.rows).length > 0;
-
-    function isDetailsOrBusinessViewTab() {
-        const labelElement = document.querySelector(CONFIG.selectors.selectedTabLabel);
-        if (!labelElement || typeof labelElement.textContent !== 'string') {
+    const isScenarioRootContext = () => {
+        const hash = window.location.hash || '';
+        if (!hash.startsWith('#scenario/')) {
             return false;
         }
-        const text = labelElement.textContent.toLowerCase();
+        if (hash.startsWith(CONFIG.routes.processOverviewHash)) {
+            return false;
+        }
+        return !CONFIG.routes.processesHash.test(hash);
+    };
+
+    const hasReadableRows = () => document.querySelectorAll(CONFIG.selectors.rows).length > 0;
+
+    function getSelectedTabLabel() {
+        const labelElement = document.querySelector(CONFIG.selectors.selectedTabLabel);
+        if (!labelElement || typeof labelElement.textContent !== 'string') {
+            return '';
+        }
+        return labelElement.textContent.toLowerCase();
+    }
+
+    function isDetailsOrBusinessViewTab() {
+        const text = getSelectedTabLabel();
+        if (!text) {
+            return false;
+        }
         return text.includes('details') || BUSINESS_VIEW_LABELS.some((label) => text.includes(label));
     }
 
@@ -1090,6 +1111,14 @@
         }
 
         return collectScenarioDetailMsgIds().length > 0;
+    };
+
+    const canCopyScenarioNames = () => {
+        const context = resolveScenarioCopyContext();
+        if (!context) {
+            return false;
+        }
+        return getSelectedRows().length > 0;
     };
 
     function normalizeList(value) {
@@ -1227,6 +1256,80 @@
         return lines.join('\n\n');
     }
 
+    // Scenario name copy helpers adapt to the current tab and table layout.
+    const SCENARIO_COPY_CONTEXTS = {
+        scenarioOverview: {
+            label: 'Scenario overview (Overview tab)',
+            columns: [{ index: 5, header: SCENARIO_NAME_HEADER }]
+        },
+        processOverview: {
+            label: 'Process overview (Overview tab)',
+            columns: [{ index: 4, header: SCENARIO_NAME_HEADER }]
+        },
+        processDetails: {
+            label: 'Process details (Details tab)',
+            columns: [
+                { index: 8, header: SCENARIO_NAME_HEADER },
+                { index: 6, header: PROCESS_NAME_HEADER }
+            ]
+        }
+    };
+
+    const getRowCellText = (row, columnIndex) => {
+        if (!row || !Number.isInteger(columnIndex)) {
+            return '';
+        }
+        const cells = Array.from(row.querySelectorAll('td, .mTable-data-cell'));
+        const cell = cells[columnIndex - 1];
+        return cell?.textContent?.trim() || '';
+    };
+
+    const isOverviewTabSelected = () => getSelectedTabLabel().includes('overview');
+    const isDetailsTabSelected = () => getSelectedTabLabel().includes('details');
+
+    function resolveScenarioCopyContext() {
+        if (isOverviewTabSelected()) {
+            if (isScenarioRootContext()) {
+                return SCENARIO_COPY_CONTEXTS.scenarioOverview;
+            }
+            if (window.location.hash?.startsWith(CONFIG.routes.processOverviewHash) || isProcessesContext()) {
+                return SCENARIO_COPY_CONTEXTS.processOverview;
+            }
+        }
+
+        if (isDetailsTabSelected() && isProcessesContext()) {
+            return SCENARIO_COPY_CONTEXTS.processDetails;
+        }
+
+        return null;
+    }
+
+    function collectScenarioNameRows() {
+        const context = resolveScenarioCopyContext();
+        if (!context) {
+            return null;
+        }
+        const rows = getSelectedRows();
+        if (!rows.length) {
+            return [];
+        }
+
+        const scenarioHeader = SCENARIO_NAME_HEADER;
+        return rows
+            .map((row) => {
+                const scenarioName = getRowCellText(row, context.columns[0].index);
+                if (!scenarioName) {
+                    return null;
+                }
+                const rowData = { [scenarioHeader]: scenarioName };
+                context.columns.slice(1).forEach((column) => {
+                    rowData[column.header] = getRowCellText(row, column.index);
+                });
+                return rowData;
+            })
+            .filter(Boolean);
+    }
+
     const formatMsgIdsAsCsv = (msgIds) => {
         if (!msgIds.length) {
             return '';
@@ -1253,6 +1356,34 @@
         const clauses = msgIds.map((msgId) => `BusinessCaseId:${msgId}`);
         return clauses.length ? `(${clauses.join(' or ')})` : '';
     };
+
+    async function copyScenarioNames(formatter, label) {
+        try {
+            const rows = collectScenarioNameRows();
+            if (rows === null) {
+                showToast('Scenario names can only be copied from the Overview or Details tabs.', { type: 'warning' });
+                return;
+            }
+            if (!rows.length) {
+                showToast('Select at least one row to copy scenario names.', { type: 'warning' });
+                return;
+            }
+            const content = formatter(rows);
+            if (!content) {
+                showToast('No scenario names found in the selected rows.', { type: 'warning' });
+                return;
+            }
+            await navigator.clipboard.writeText(content);
+            showToast(`Copied scenario names ${label}.`, { type: 'success' });
+        } catch (error) {
+            console.error('Failed to copy scenario names', error);
+            showToast('Failed to copy scenario names. Check console for details.', { type: 'error' });
+        }
+    }
+
+    const copyScenarioNamesAsCsv = () => copyScenarioNames(formatRowsAsCsv, 'as CSV');
+    const copyScenarioNamesAsTab = () => copyScenarioNames(formatRowsAsTab, 'as a table');
+    const copyScenarioNamesAsList = () => copyScenarioNames(formatRowsAsLists, 'as a list');
 
     async function openChangeVariablesPopup(row) {
         const processNameCell = row.querySelector(CONFIG.selectors.processNameCell);
@@ -1612,7 +1743,20 @@
                 ]
             });
             */
-            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup/*, startupInfoGroup*/].filter(Boolean);
+            // Scenario names adapt to the selected tab and table layout.
+            const copyScenarioNamesGroup = addActionGroup(host, {
+                label: 'Copy Scenario names',
+                icon: '📋',
+                defaultOptionId: 'table',
+                options: [
+                    { id: 'table', label: 'as table', onSelect: copyScenarioNamesAsTab },
+                    { id: 'csv', label: 'as CSV', onSelect: copyScenarioNamesAsCsv },
+                    { id: 'list', label: 'as list', onSelect: copyScenarioNamesAsList }
+                ],
+                isEnabled: canCopyScenarioNames
+            });
+
+            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, copyScenarioNamesGroup/*, startupInfoGroup*/].filter(Boolean);
 
             if (!buttons.length) {
                 return;
@@ -1621,8 +1765,9 @@
             const updateButtonState = () => {
                 const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
                 buttons.forEach((button) => {
+                    const buttonEnabled = button.isEnabled ? button.isEnabled() : baseEnabled;
                     const actionAvailable = button.isActionAvailable ? button.isActionAvailable() : true;
-                    button.setEnabled(baseEnabled && actionAvailable);
+                    button.setEnabled(buttonEnabled && actionAvailable);
                 });
             };
 
