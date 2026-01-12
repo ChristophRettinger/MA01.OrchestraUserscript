@@ -486,7 +486,8 @@
                     fontFamily: 'inherit',
                     fontSize: '12px',
                     cursor: 'pointer',
-                    background: '#cbe5ff'
+                    background: '#cbe5ff',
+					color: '#111111'
                 });
             });
 
