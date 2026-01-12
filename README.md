@@ -10,10 +10,15 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * The helper clears stale Business view filters, fills the MSGID filter, and tries to keep the clipboard in sync with the searched value.
 
 * Copy MSGIDs
-  * Default action: **As CSV** – copies the selected rows' MSGIDs with a `MSGID` header and line-feed separated rows.
-  * Further options: **As Table** (tab separated), **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
+  * Default action: **As Table** – copies the selected rows' MSGIDs with a `MSGID` header and line-feed separated rows.
+  * Further options: **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
   * Duplicate MSGIDs are still removed automatically so each list stays tidy.
   * Selecting multiple rows keeps the helper enabled so you can export MSGIDs from every highlighted row at once.
+
+* Copy Scenario names
+  * Default action: **As Table** – copies scenario names from the selected rows into a tab-separated table.
+  * Further options: **As CSV** (quoted, `;` separated) and **As List** (single line, comma separated).
+  * The helper adapts to the active tab: scenario overview uses column 5, process overview uses column 4, and process details uses column 8 plus the process name column (6).
 
 * Extract Business Keys
   * Default action: **As CSV** – extracts all visible business keys from the selected rows and exports them as `;` separated CSV with quotes when needed.
@@ -28,7 +33,9 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 
 ## Availability
 
-The helper buttons become active only on the process overview page (`#scenario/processOverview/`), when at least one process row is available, and while the "Details" or "Business view" tab is selected. In all other cases the buttons stay greyed out to prevent running the helpers without data. The MSGID helpers now also activate when the scenario detail window contains an MSGID, so you can work with values that are not exposed in the list yet. If no MSGID can be resolved a warning toast explains which prerequisites are missing.
+The MSGID and Business Key helpers become active only on the process overview page (`#scenario/processOverview/`), when at least one process row is available, and while the "Details" or "Business view" tab is selected. In all other cases those buttons stay greyed out to prevent running the helpers without data. The MSGID helpers also activate when the scenario detail window contains an MSGID, so you can work with values that are not exposed in the list yet. If no MSGID can be resolved a warning toast explains which prerequisites are missing.
+
+The **Copy Scenario names** helper follows the selected rows on the Scenario overview tab, the Process overview tab, or the Process details tab. It adjusts the column mapping automatically to match each table layout so the scenario and process names are exported correctly.
 
 ## Helper Panel
 
