@@ -5,7 +5,10 @@
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
-// @match        https://esbt.wien.gv.at:*/orchestra/*
+// @match        https://*.wien.gv.at:*/orchestra/*
+// @match        https://*.routine.akhwien.at:*/orchestra/*
+// @match        https://*.esb.akhwien.at:*/orchestra/*
+// @match        https://*.esb.magwien.gv.at:*/orchestra/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=wien.at
 // @grant        none
 // ==/UserScript==
