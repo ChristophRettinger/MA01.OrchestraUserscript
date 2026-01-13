@@ -1245,7 +1245,8 @@
     const formatRowsAsCsv = (rows) => formatRows(rows, ';', true);
     const formatRowsAsTab = (rows) => formatRows(rows, '\t', false);
 
-    function formatRowsAsLists(rows) {
+    // List format repeats a header line per column group; plain format omits the headers.
+    function formatRowsAsLists(rows, { includeHeader = true } = {}) {
         const headers = collectHeaders(rows);
         if (!headers.length) {
             return '';
@@ -1255,11 +1256,14 @@
             const values = rows
                 .map((row) => row[header])
                 .filter(Boolean);
-            return `${header}\n${ensureUniqueValues(values).join(', ')}`;
+            const listValues = ensureUniqueValues(values).join(', ');
+            return includeHeader ? `${header}\n${listValues}` : listValues;
         });
 
         return lines.join('\n\n');
     }
+
+    const formatRowsAsPlainLists = (rows) => formatRowsAsLists(rows, { includeHeader: false });
 
     // Scenario name copy helpers adapt to the current tab and table layout.
     const SCENARIO_COPY_CONTEXTS = {
@@ -1343,12 +1347,15 @@
         return lines.join('\n');
     };
 
-    const formatMsgIdsAsList = (msgIds) => {
+    const formatMsgIdsAsList = (msgIds, { includeHeader = true } = {}) => {
         if (!msgIds.length) {
             return '';
         }
-        return `MSGID\n${msgIds.join(', ')}`;
+        const listValues = msgIds.join(', ');
+        return includeHeader ? `MSGID\n${listValues}` : listValues;
     };
+
+    const formatMsgIdsAsPlain = (msgIds) => formatMsgIdsAsList(msgIds, { includeHeader: false });
 
     const formatMsgIdsAsTab = (msgIds) => {
         if (!msgIds.length) {
@@ -1389,6 +1396,7 @@
     const copyScenarioNamesAsCsv = () => copyScenarioNames(formatRowsAsCsv, 'as CSV');
     const copyScenarioNamesAsTab = () => copyScenarioNames(formatRowsAsTab, 'as a table');
     const copyScenarioNamesAsList = () => copyScenarioNames(formatRowsAsLists, 'as a list');
+    const copyScenarioNamesAsPlain = () => copyScenarioNames(formatRowsAsPlainLists, 'as a plain list');
 
     async function openChangeVariablesPopup(row) {
         const processNameCell = row.querySelector(CONFIG.selectors.processNameCell);
@@ -1586,6 +1594,7 @@
     const copyMsgIdsAsCsv = () => copyMsgIds(formatMsgIdsAsCsv, 'as CSV');
     const copyMsgIdsAsTab = () => copyMsgIds(formatMsgIdsAsTab, 'as a table');
     const copyMsgIdsAsList = () => copyMsgIds(formatMsgIdsAsList, 'as a list');
+    const copyMsgIdsAsPlain = () => copyMsgIds(formatMsgIdsAsPlain, 'as a plain list');
     const copyMsgIdsAsElastic = () => copyMsgIds(formatMsgIdsAsElastic, 'for Elastic search');
 
     async function copyBusinessKeys(formatter, label) {
@@ -1612,6 +1621,7 @@
     const copyBusinessKeysAsCsv = () => copyBusinessKeys(formatRowsAsCsv, 'as CSV');
     const copyBusinessKeysAsTab = () => copyBusinessKeys(formatRowsAsTab, 'as a table');
     const copyBusinessKeysAsList = () => copyBusinessKeys(formatRowsAsLists, 'as grouped lists');
+    const copyBusinessKeysAsPlain = () => copyBusinessKeys(formatRowsAsPlainLists, 'as plain lists');
 
     function mapBuKeysToRows(values) {
         return values.map((value) => parseSubflRow(String(value || ''))).filter((row) => Object.keys(row).length > 0);
@@ -1720,6 +1730,7 @@
                     { id: 'table', label: 'as table', onSelect: copyMsgIdsAsTab },
                     /*{ id: 'csv', label: 'As CSV', onSelect: copyMsgIdsAsCsv },*/
                     { id: 'list', label: 'as list', onSelect: copyMsgIdsAsList },
+                    { id: 'plain', label: 'as plain', onSelect: copyMsgIdsAsPlain },
                     { id: 'elastic', label: 'as Elastic search', onSelect: copyMsgIdsAsElastic }
                 ],
                 isActionAvailable: hasMsgIdSource
@@ -1732,7 +1743,8 @@
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyBusinessKeysAsTab },
                     { id: 'csv', label: 'as CSV', onSelect: copyBusinessKeysAsCsv },
-                    { id: 'list', label: 'as list', onSelect: copyBusinessKeysAsList }
+                    { id: 'list', label: 'as list', onSelect: copyBusinessKeysAsList },
+                    { id: 'plain', label: 'as plain', onSelect: copyBusinessKeysAsPlain }
                 ]
             });
 
@@ -1756,7 +1768,8 @@
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyScenarioNamesAsTab },
                     { id: 'csv', label: 'as CSV', onSelect: copyScenarioNamesAsCsv },
-                    { id: 'list', label: 'as list', onSelect: copyScenarioNamesAsList }
+                    { id: 'list', label: 'as list', onSelect: copyScenarioNamesAsList },
+                    { id: 'plain', label: 'as plain', onSelect: copyScenarioNamesAsPlain }
                 ],
                 isEnabled: canCopyScenarioNames
             });
