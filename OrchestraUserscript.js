@@ -83,6 +83,8 @@
     };
 
     const MSGID_LABELS = ['_MSGID'];
+    // The MSGID value is always stored in column 9 (1-based) of the process tables.
+    const MSGID_COLUMN_INDEX = 9;
     const BUSINESS_VIEW_LABELS = ['business view', 'business-ansicht', 'business ansicht', 'business - ansicht'];
     const BUSINESS_KEY_PLACEHOLDERS = ['please select a business key', 'bitte wählen sie einen business-schlüssel'];
     const CONNECTOR_AND_LABELS = ['and', 'und'];
@@ -1064,9 +1066,11 @@
     }
 
     function collectSelectedMsgIds() {
-        const msgIds = Array.from(document.querySelectorAll(CONFIG.selectors.msgIdCells))
+        const msgIds = getSelectedRows()
+            .map((row) => getColumnCell(row, MSGID_COLUMN_INDEX))
             .flatMap((cell) => {
-                const matches = Array.from(cell.innerText.matchAll(/_MSGID:\s*([^,]*)/g));
+                const text = cell?.innerText || '';
+                const matches = Array.from(text.matchAll(/_MSGID:\s*([^,]*)/g));
                 if (!matches.length) {
                     return [];
                 }
@@ -1133,19 +1137,20 @@
 
     const getSelectedRows = () => Array.from(document.querySelectorAll(CONFIG.selectors.msgIdRows));
 
-    // Business key values are embedded in a single cell as "Key: Value, Other_Key: Value" with values that may contain commas or colons.
+    // Business key values are embedded in the MSGID column (column 9) as "Key: Value, Other_Key: Value" with values that may contain commas or colons.
     // Keys start with an underscore or uppercase letter and always include at least one underscore.
     const BUSINESS_KEY_PATTERN = /(_[A-Z_][A-Z0-9_]*|[A-Z]+_[a-z0-9_]+): */g;
 
-    const findMsgIdCell = (row) => {
+    const getColumnCell = (row, columnIndex) => {
         if (!row) {
             return null;
         }
         const cells = Array.from(row.querySelectorAll('.mTable-data-cell, td'));
-        return cells.find((cell) => {
-            const text = cell?.textContent || '';
-            return MSGID_LABELS.some((label) => text.includes(label));
-        });
+        return cells[columnIndex - 1] || null;
+    };
+
+    const findMsgIdCell = (row) => {
+        return getColumnCell(row, MSGID_COLUMN_INDEX);
     };
 
     const parseBusinessKeyCell = (text) => {

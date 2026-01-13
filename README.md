@@ -10,7 +10,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * The helper clears stale Business view filters, fills the MSGID filter, and tries to keep the clipboard in sync with the searched value.
 
 * Copy MSGIDs
-  * Default action: **As Table** – copies the selected rows' MSGIDs with a `MSGID` header and line-feed separated rows.
+  * Default action: **As Table** – copies the selected rows' MSGIDs from column 9 with a `MSGID` header and line-feed separated rows.
   * Further options: **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
   * Duplicate MSGIDs are still removed automatically so each list stays tidy.
   * Selecting multiple rows keeps the helper enabled so you can export MSGIDs from every highlighted row at once.
@@ -21,7 +21,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * The helper adapts to the active tab: scenario overview uses column 5, process overview uses column 4, and process details uses column 8 plus the process name column (6).
 
 * Extract Business Keys
-  * Default action: **As CSV** – extracts all visible business keys from the selected rows and exports them as `;` separated CSV with quotes when needed.
+  * Default action: **As CSV** – extracts all visible business keys from column 9 of the selected rows and exports them as `;` separated CSV with quotes when needed.
   * Further options: **As Table** (tab separated, unquoted) and **As List** (one comma-separated list per business key).
   * Keys are parsed from the `_MSGID` cell using the `Key: Value, Key2: Value2` spacing so values that contain commas or colons remain intact.
 
