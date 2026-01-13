@@ -1268,7 +1268,11 @@
 
     const formatRowsAsPlainLists = (rows) => formatRowsAsLists(rows, { includeHeader: false });
 
-    // Scenario name copy helpers adapt to the current tab and table layout.
+    // Scenario name copy helpers adapt to the current tab and table layout, including Business view.
+    const SCENARIO_DETAIL_COLUMNS = [
+        { index: 8, header: SCENARIO_NAME_HEADER },
+        { index: 6, header: PROCESS_NAME_HEADER }
+    ];
     const SCENARIO_COPY_CONTEXTS = {
         scenarioOverview: {
             label: 'Scenario overview (Overview tab)',
@@ -1280,10 +1284,11 @@
         },
         processDetails: {
             label: 'Process details (Details tab)',
-            columns: [
-                { index: 8, header: SCENARIO_NAME_HEADER },
-                { index: 6, header: PROCESS_NAME_HEADER }
-            ]
+            columns: SCENARIO_DETAIL_COLUMNS
+        },
+        processBusinessView: {
+            label: 'Process details (Business view tab)',
+            columns: SCENARIO_DETAIL_COLUMNS
         }
     };
 
@@ -1311,6 +1316,10 @@
 
         if (isDetailsTabSelected() && isProcessesContext()) {
             return SCENARIO_COPY_CONTEXTS.processDetails;
+        }
+
+        if (isBusinessViewTabSelected() && isProcessesContext()) {
+            return SCENARIO_COPY_CONTEXTS.processBusinessView;
         }
 
         return null;
@@ -1376,7 +1385,7 @@
         try {
             const rows = collectScenarioNameRows();
             if (rows === null) {
-                showToast('Scenario names can only be copied from the Overview or Details tabs.', { type: 'warning' });
+                showToast('Scenario names can only be copied from the Overview, Details, or Business view tabs.', { type: 'warning' });
                 return;
             }
             if (!rows.length) {

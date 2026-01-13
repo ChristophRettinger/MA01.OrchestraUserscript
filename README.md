@@ -18,7 +18,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 * Copy Scenario names
   * Default action: **As Table** – copies scenario names from the selected rows into a tab-separated table.
   * Further options: **As CSV** (quoted, `;` separated), **As List** (single line, comma separated), and **As Plain** (list without headers).
-  * The helper adapts to the active tab: scenario overview uses column 5, process overview uses column 4, and process details uses column 8 plus the process name column (6).
+  * The helper adapts to the active tab: scenario overview uses column 5, process overview uses column 4, and process details or Business view uses column 8 plus the process name column (6).
 
 * Extract Business Keys
   * Default action: **As CSV** – extracts all visible business keys from column 9 of the selected rows and exports them as `;` separated CSV with quotes when needed.
@@ -35,7 +35,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
 
 The MSGID and Business Key helpers become active only on the process overview page (`#scenario/processOverview/`), when at least one process row is available, and while the "Details" or "Business view" tab is selected. In all other cases those buttons stay greyed out to prevent running the helpers without data. The MSGID helpers also activate when the scenario detail window contains an MSGID, so you can work with values that are not exposed in the list yet. If no MSGID can be resolved a warning toast explains which prerequisites are missing.
 
-The **Copy Scenario names** helper follows the selected rows on the Scenario overview tab, the Process overview tab, or the Process details tab. It adjusts the column mapping automatically to match each table layout so the scenario and process names are exported correctly.
+The **Copy Scenario names** helper follows the selected rows on the Scenario overview tab, the Process overview tab, or the Process details and Business view tabs. It adjusts the column mapping automatically to match each table layout so the scenario and process names are exported correctly.
 
 ## Helper Panel
 
