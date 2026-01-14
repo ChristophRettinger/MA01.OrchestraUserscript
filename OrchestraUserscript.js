@@ -9,6 +9,7 @@
 // @match        https://*.routine.akhwien.at:*/orchestra/*
 // @match        https://*.esb.akhwien.at:*/orchestra/*
 // @match        https://*.esb.magwien.gv.at:*/orchestra/*
+// @match 		 https://*.wien.at/orchestra/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=wien.at
 // @grant        none
 // ==/UserScript==
