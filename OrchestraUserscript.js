@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orchestra Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-22
+// @version      2025-10-23
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
@@ -74,11 +74,6 @@
             changeVariables: 'Change variables',
             cancel: 'Cancel',
             buKeys: 'BuKeys'
-        },
-        elastic: {
-            defaultFields: ['_CASENO_ISH', 'SUBFL_category', 'SUBFL_changedate', '_PID_ISH', '_HCMMSGEVENT', '_UNIT'],
-            scenarioName: 'ITI_SUBFL_SAP_HCM_empfangen_129',
-            environment: 'production'
         }
     };
 
@@ -1045,32 +1040,6 @@
         }, Object.create(null));
     };
 
-    function buildElasticQuery(rows, fields = CONFIG.elastic.defaultFields) {
-        const clauses = rows
-            .map(parseSubflRow)
-            .map((kv) => {
-                const parts = fields
-                    .map((field) => {
-                        const value = kv[field];
-                        if (!value) {
-                            return null;
-                        }
-                        const normalizedField = field === '_UNIT' ? '_INSTITUTION' : field;
-                        const normalizedValue = /:/.test(value) ? `"${value}"` : value;
-                        return `BK.${normalizedField}:${normalizedValue}`;
-                    })
-                    .filter(Boolean);
-                return parts.length > 0 ? `(${parts.join(' and ')})` : null;
-            })
-            .filter(Boolean);
-
-        const baseQuery = `ScenarioName:${CONFIG.elastic.scenarioName} and Environment:${CONFIG.elastic.environment}`;
-        if (clauses.length === 0) {
-            return baseQuery;
-        }
-        return `${baseQuery} and ( ${clauses.join(' or ')} )`;
-    }
-
     function collectSelectedMsgIds() {
         const msgIds = getSelectedRows()
             .map((row) => getColumnCell(row, MSGID_COLUMN_INDEX))
@@ -1491,7 +1460,18 @@
         await waitForElementRemoval(popup);
     }
 
+    async function selectRowForStartupInfo(row) {
+        if (!row) {
+            return;
+        }
+        const clickTarget = row.querySelector('td, .mTable-data-cell') || row;
+        dispatchMouseClick(clickTarget);
+        await delay(50);
+    }
+
     async function processRowForStartupInfo(row) {
+        // Change variables only supports single-row selection, so focus each row before opening.
+        await selectRowForStartupInfo(row);
         const popup = await openChangeVariablesPopup(row);
         if (!popup) {
             return null;
@@ -1672,50 +1652,21 @@
             .filter((row) => Object.keys(row).length > 0);
     }
 
-    function formatStartupInfoAsBuKeys(values) {
-        return values
-            .map(({ buKeys, businessCaseId }) => {
-                if (!buKeys && !businessCaseId) {
-                    return null;
-                }
-                const normalizedBuKeys = buKeys || '';
-                const normalizedCaseId = businessCaseId || '';
-                if (normalizedBuKeys && normalizedCaseId) {
-                    return `${normalizedBuKeys}\t${normalizedCaseId}`;
-                }
-                return normalizedBuKeys || normalizedCaseId;
-            })
-            .filter(Boolean)
-            .join('\n');
-    }
-
-    function getStartupBuKeys(values) {
-        return values.map(({ buKeys }) => buKeys).filter(Boolean);
-    }
-
-    async function copyStartupBuKeys() {
-        try {
-            const startupInfo = await getStartupInfoArray();
-            if (startupInfo === null) {
-                return;
-            }
-            const normalizedInfo = normalizeList(startupInfo);
-            const content = formatStartupInfoAsBuKeys(normalizedInfo);
-            if (!content) {
-                showToast('No startup info found for the current rows.', { type: 'warning' });
-                return;
-            }
-            // Keep each record on its own line to simplify downstream pasting.
-            await navigator.clipboard.writeText(content);
-            const label = pluralize('startup record', normalizedInfo.length);
-            showToast(`Copied ${normalizedInfo.length} ${label} to the clipboard.`, { type: 'success' });
-        } catch (error) {
-            console.error('Failed to copy startup info', error);
-            showToast('Failed to copy startup info. Check console for details.', { type: 'error' });
+    function formatStartupInfoAsElastic(values) {
+        // Elastic search for startup info only uses BusinessCaseId values.
+        const caseIds = ensureUniqueValues(
+            values
+                .map((entry) => entry?.businessCaseId)
+                .filter(Boolean)
+        );
+        if (!caseIds.length) {
+            return '';
         }
+        const clauses = caseIds.map((caseId) => `BusinessCaseId:${caseId}`);
+        return `(${clauses.join(' or ')})`;
     }
 
-    async function copyStartupBuKeysAsCsv() {
+    async function copyStartupInfoRows(formatter, label) {
         try {
             const startupInfo = await getStartupInfoArray();
             if (startupInfo === null) {
@@ -1726,35 +1677,48 @@
                 showToast('No startup information found for the current rows.', { type: 'warning' });
                 return;
             }
-            const content = formatRowsAsCsv(rows);
+            const content = formatter(rows);
+            if (!content) {
+                showToast('No startup information found for the current rows.', { type: 'warning' });
+                return;
+            }
             await navigator.clipboard.writeText(content);
-            showToast('Copied startup information as CSV.', { type: 'success' });
+            showToast(`Copied startup information ${label}.`, { type: 'success' });
         } catch (error) {
-            console.error('Failed to copy startup info as CSV', error);
-            showToast('Failed to format startup info as CSV. Check console for details.', { type: 'error' });
+            console.error('Failed to copy startup info', error);
+            showToast('Failed to copy startup info. Check console for details.', { type: 'error' });
         }
     }
 
-    async function copyElastic() {
+    async function copyStartupInfoAsElastic() {
         try {
             const startupInfo = await getStartupInfoArray();
             if (startupInfo === null) {
                 return;
             }
-            const normalizedKeys = normalizeList(getStartupBuKeys(startupInfo));
-            if (!normalizedKeys.length) {
-                showToast('No BuKeys available to build an Elastic query.', { type: 'warning' });
+            const normalizedInfo = normalizeList(startupInfo);
+            const query = formatStartupInfoAsElastic(normalizedInfo);
+            if (!query) {
+                showToast('No BusinessCaseId values available to build an Elastic search.', { type: 'warning' });
                 return;
             }
-            const query = buildElasticQuery(normalizedKeys);
             await navigator.clipboard.writeText(query);
-            const label = pluralize('BuKey', normalizedKeys.length);
-            showToast(`Copied Elastic query for ${normalizedKeys.length} ${label}.`, { type: 'success' });
+            const caseCount = ensureUniqueValues(
+                normalizedInfo
+                    .map((entry) => entry?.businessCaseId)
+                    .filter(Boolean)
+            ).length;
+            const label = pluralize('BusinessCaseId', caseCount);
+            showToast(`Copied Elastic search for ${caseCount} ${label}.`, { type: 'success' });
         } catch (error) {
-            console.error('Failed to copy Elastic query', error);
-            showToast('Failed to copy the Elastic query. Check console for details.', { type: 'error' });
+            console.error('Failed to copy Elastic search', error);
+            showToast('Failed to copy the Elastic search. Check console for details.', { type: 'error' });
         }
     }
+
+    const copyStartupInfoAsTab = () => copyStartupInfoRows(formatRowsAsTab, 'as a table');
+    const copyStartupInfoAsList = () => copyStartupInfoRows(formatRowsAsLists, 'as a list');
+    const copyStartupInfoAsPlain = () => copyStartupInfoRows(formatRowsAsPlainLists, 'as a plain list');
 
     function addButton(parent, config) {
         const parentElement = typeof parent === 'string' ? document.querySelector(parent) : parent;
@@ -1818,18 +1782,19 @@
             const startupInfoGroup = addActionGroup(host, {
                 label: 'Get Startup Info',
                 icon: '↪',
-                defaultOptionId: 'bukeys',
+                defaultOptionId: 'table',
                 options: [
-                    { id: 'bukeys', label: 'As BuKeys', onSelect: copyStartupBuKeys },
-                    { id: 'csv', label: 'As CSV', onSelect: copyStartupBuKeysAsCsv },
-                    { id: 'elastic', label: 'As Elastic query', onSelect: copyElastic }
+                    { id: 'table', label: 'as table', onSelect: copyStartupInfoAsTab },
+                    { id: 'list', label: 'as list', onSelect: copyStartupInfoAsList },
+                    { id: 'plain', label: 'as plain', onSelect: copyStartupInfoAsPlain },
+                    { id: 'elastic', label: 'as Elastic search', onSelect: copyStartupInfoAsElastic }
                 ]
             });
 
             // Scenario names adapt to the selected tab and table layout.
             const copyScenarioNamesGroup = addActionGroup(host, {
                 label: 'Copy Scenario names',
-                icon: '📋',
+                icon: '🏷️',
                 defaultOptionId: 'table',
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyScenarioNamesAsTab },
