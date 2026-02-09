@@ -25,9 +25,9 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * Further options: **As Table** (tab separated, unquoted), **As List** (one comma-separated list per business key), and **As Plain** (list output without headers).
   * Keys are parsed from the `_MSGID` cell using the `Key: Value, Key2: Value2` spacing so values that contain commas or colons remain intact.
 
-* Extract Startup Info
-  * Default action: **As BuKeys** – mirrors the previous "Copy Startup BuKeys" behaviour and joins the gathered keys with line feeds between records.
-  * Further options: **As CSV** (quoted, `;` separated) and **As Elastic query** (mirrors the former "Copy Startup for Elastic" output).
+* Get Startup Info
+  * Default action: **As BuKeys** – copies each selected row's BuKeys with the BusinessCaseId from the MSGID/_MSGID textbox placed alongside it for quick pasting.
+  * Further options: **As CSV** (quoted, `;` separated with BusinessCaseId included as a column) and **As Elastic query** (mirrors the former "Copy Startup for Elastic" output).
   * Startup extraction now honours only the currently selected rows and snapshots that list before opening any dialogs, keeping later row highlights from changing the processed set.
   * The cancellable progress toast remains in place while opening each row's Startup window.
 

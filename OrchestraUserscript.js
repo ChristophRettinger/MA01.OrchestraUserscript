@@ -87,6 +87,8 @@
     };
 
     const MSGID_LABELS = ['_MSGID'];
+    const STARTUP_INFO_MSGID_LABELS = ['msgid', '_msgid'];
+    const STARTUP_INFO_CASE_ID_KEY = 'BusinessCaseId';
     // The MSGID value is always stored in column 9 (1-based) of the process tables.
     const MSGID_COLUMN_INDEX = 9;
     const BUSINESS_VIEW_LABELS = ['business view', 'business-ansicht', 'business ansicht', 'business - ansicht'];
@@ -1436,17 +1438,39 @@
         return document.querySelector(CONFIG.selectors.popup);
     }
 
-    function extractBuKeysFromPopup(popup) {
+    function extractPopupValueByLabel(popup, labels) {
         if (!popup) {
             return null;
         }
-        const buKeyCell = Array.from(popup.querySelectorAll(CONFIG.selectors.popupKeyCell))
-            .find((element) => element.textContent.includes(CONFIG.labels.buKeys));
-        if (!buKeyCell) {
+        const normalizedLabels = labels.map((label) => label.toLowerCase());
+        const labelCell = Array.from(popup.querySelectorAll(CONFIG.selectors.popupKeyCell))
+            .find((element) => {
+                const normalizedText = element.textContent?.trim().toLowerCase() || '';
+                return normalizedLabels.some((label) => normalizedText.includes(label));
+            });
+        if (!labelCell) {
             return null;
         }
-        const input = buKeyCell.nextElementSibling?.querySelector('input');
+        const input = labelCell.nextElementSibling?.querySelector('input');
         return input?.value?.trim() || null;
+    }
+
+    function extractBuKeysFromPopup(popup) {
+        return extractPopupValueByLabel(popup, [CONFIG.labels.buKeys]);
+    }
+
+    function extractBusinessCaseIdFromPopup(popup) {
+        return extractPopupValueByLabel(popup, STARTUP_INFO_MSGID_LABELS);
+    }
+
+    // Startup info combines BuKeys with the BusinessCaseId stored in the MSGID/_MSGID textbox.
+    function extractStartupInfoFromPopup(popup) {
+        const buKeys = extractBuKeysFromPopup(popup);
+        const businessCaseId = extractBusinessCaseIdFromPopup(popup);
+        if (!buKeys && !businessCaseId) {
+            return null;
+        }
+        return { buKeys, businessCaseId };
     }
 
     async function closePopup(popup) {
@@ -1467,17 +1491,17 @@
         await waitForElementRemoval(popup);
     }
 
-    async function processRowForBuKeys(row) {
+    async function processRowForStartupInfo(row) {
         const popup = await openChangeVariablesPopup(row);
         if (!popup) {
             return null;
         }
-        const value = extractBuKeysFromPopup(popup);
+        const value = extractStartupInfoFromPopup(popup);
         await closePopup(popup);
         return value;
     }
 
-    async function getBuKeysArray() {
+    async function getStartupInfoArray() {
         // Snapshot the currently selected rows up front so later context menu interactions
         // cannot change which records get processed.
         const rows = getSelectedRows().map((row, index) => ({ element: row, index }));
@@ -1509,7 +1533,7 @@
             actions: [cancelAction]
         });
 
-        const buKeys = [];
+        const startupInfo = [];
         for (const [index, rowData] of rows.entries()) {
             if (cancelled) {
                 break;
@@ -1520,12 +1544,12 @@
                 progressToast.update(`Processing row ${processedCount} of ${totalRows}…`);
             }
 
-            const value = await processRowForBuKeys(rowData.element);
+            const value = await processRowForStartupInfo(rowData.element);
             if (cancelled) {
                 break;
             }
             if (value) {
-                buKeys.push(value);
+                startupInfo.push(value);
             }
         }
 
@@ -1538,7 +1562,7 @@
             return null;
         }
 
-        return buKeys;
+        return startupInfo;
     }
 
     const pluralize = (word, count) => (count === 1 ? word : `${word}s`);
@@ -1636,38 +1660,68 @@
     const copyBusinessKeysAsList = () => copyBusinessKeys(formatRowsAsLists, 'as grouped lists');
     const copyBusinessKeysAsPlain = () => copyBusinessKeys(formatRowsAsPlainLists, 'as plain lists');
 
-    function mapBuKeysToRows(values) {
-        return values.map((value) => parseSubflRow(String(value || ''))).filter((row) => Object.keys(row).length > 0);
+    function mapStartupInfoToRows(values) {
+        return values
+            .map(({ buKeys, businessCaseId }) => {
+                const row = parseSubflRow(String(buKeys || ''));
+                if (businessCaseId) {
+                    row[STARTUP_INFO_CASE_ID_KEY] = businessCaseId;
+                }
+                return row;
+            })
+            .filter((row) => Object.keys(row).length > 0);
+    }
+
+    function formatStartupInfoAsBuKeys(values) {
+        return values
+            .map(({ buKeys, businessCaseId }) => {
+                if (!buKeys && !businessCaseId) {
+                    return null;
+                }
+                const normalizedBuKeys = buKeys || '';
+                const normalizedCaseId = businessCaseId || '';
+                if (normalizedBuKeys && normalizedCaseId) {
+                    return `${normalizedBuKeys}\t${normalizedCaseId}`;
+                }
+                return normalizedBuKeys || normalizedCaseId;
+            })
+            .filter(Boolean)
+            .join('\n');
+    }
+
+    function getStartupBuKeys(values) {
+        return values.map(({ buKeys }) => buKeys).filter(Boolean);
     }
 
     async function copyStartupBuKeys() {
         try {
-            const buKeys = await getBuKeysArray();
-            if (buKeys === null) {
+            const startupInfo = await getStartupInfoArray();
+            if (startupInfo === null) {
                 return;
             }
-            const normalizedKeys = normalizeList(buKeys);
-            if (!normalizedKeys.length) {
-                showToast('No BuKeys found for the current rows.', { type: 'warning' });
+            const normalizedInfo = normalizeList(startupInfo);
+            const content = formatStartupInfoAsBuKeys(normalizedInfo);
+            if (!content) {
+                showToast('No startup info found for the current rows.', { type: 'warning' });
                 return;
             }
             // Keep each record on its own line to simplify downstream pasting.
-            await navigator.clipboard.writeText(normalizedKeys.join('\n'));
-            const label = pluralize('BuKey', normalizedKeys.length);
-            showToast(`Copied ${normalizedKeys.length} ${label} to the clipboard.`, { type: 'success' });
+            await navigator.clipboard.writeText(content);
+            const label = pluralize('startup record', normalizedInfo.length);
+            showToast(`Copied ${normalizedInfo.length} ${label} to the clipboard.`, { type: 'success' });
         } catch (error) {
-            console.error('Failed to copy BuKeys', error);
-            showToast('Failed to copy BuKeys. Check console for details.', { type: 'error' });
+            console.error('Failed to copy startup info', error);
+            showToast('Failed to copy startup info. Check console for details.', { type: 'error' });
         }
     }
 
     async function copyStartupBuKeysAsCsv() {
         try {
-            const buKeys = await getBuKeysArray();
-            if (buKeys === null) {
+            const startupInfo = await getStartupInfoArray();
+            if (startupInfo === null) {
                 return;
             }
-            const rows = mapBuKeysToRows(buKeys);
+            const rows = mapStartupInfoToRows(startupInfo);
             if (!rows.length) {
                 showToast('No startup information found for the current rows.', { type: 'warning' });
                 return;
@@ -1683,11 +1737,11 @@
 
     async function copyElastic() {
         try {
-            const buKeys = await getBuKeysArray();
-            if (buKeys === null) {
+            const startupInfo = await getStartupInfoArray();
+            if (startupInfo === null) {
                 return;
             }
-            const normalizedKeys = normalizeList(buKeys);
+            const normalizedKeys = normalizeList(getStartupBuKeys(startupInfo));
             if (!normalizedKeys.length) {
                 showToast('No BuKeys available to build an Elastic query.', { type: 'warning' });
                 return;
@@ -1761,9 +1815,8 @@
                 ]
             });
 
-            /*
             const startupInfoGroup = addActionGroup(host, {
-                label: 'Extract Startup Info',
+                label: 'Get Startup Info',
                 icon: '↪',
                 defaultOptionId: 'bukeys',
                 options: [
@@ -1772,7 +1825,7 @@
                     { id: 'elastic', label: 'As Elastic query', onSelect: copyElastic }
                 ]
             });
-            */
+
             // Scenario names adapt to the selected tab and table layout.
             const copyScenarioNamesGroup = addActionGroup(host, {
                 label: 'Copy Scenario names',
@@ -1787,7 +1840,7 @@
                 isEnabled: canCopyScenarioNames
             });
 
-            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, copyScenarioNamesGroup/*, startupInfoGroup*/].filter(Boolean);
+            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup, copyScenarioNamesGroup].filter(Boolean);
 
             if (!buttons.length) {
                 return;
