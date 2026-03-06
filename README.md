@@ -63,6 +63,6 @@ The helper now locates Elastic's copy control by its visible label (**Copy to cl
 `CyberArkUserScript.js` targets `https://cyberark.wien.gv.at/` and appends translated short names to known server hostnames inside CyberArk grid cells.
 
 * It scans `span.cyb-grid-cell__text` entries for hostnames (for example `slvmesborc02.wienkav.at`).
-* When a hostname exists in the script translation table, the script rewrites the visible text as `hostname (translation)`.
-* The translation table currently includes `slvmesborc02.wienkav.at → ESBQ` and is intentionally easy to extend when more mappings are provided.
+* When a hostname exists in the script translation table, the script rewrites the visible text as `hostname (**translation**)`.
+* Server definitions now support a `#` wildcard placeholder in both hostname and translation templates (for example `slvqesborcwsk#.wienkav.at → test#-wsk`), and the matched number is inserted with leading zeros preserved.
 * Newly rendered rows are handled automatically through a `MutationObserver`, so translations continue to appear while paging or filtering.
