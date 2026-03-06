@@ -41,9 +41,9 @@
         'slvpesborcmag#.routine.akhwien.at': 'prod#-mag',
 		
 		'svmmgrorc001.wienkav.at': 'esbd',
-        'slvqesborc#.wienkav.at': 'esbt-1',
-        'slvmesborc#.wienkav.at': 'esbq-1',
-        'slvpesborc#.wienkav.at': 'esbp-1'
+        'slvqesborc#.wienkav.at': 'esbt-#',
+        'slvmesborc#.wienkav.at': 'esbq-#',
+        'slvpesborc#.wienkav.at': 'esbp-#'
 	};
 
     const WILDCARD_TOKEN = '#';
