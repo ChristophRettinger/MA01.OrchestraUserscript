@@ -25,27 +25,25 @@
      *   "slvqesborcwsk#.wienkav.at": "test#-wsk"
      */
     const SERVER_TRANSLATIONS = {
-        'slvdesborcwsk01.wienkav.at': 'dev01-wsk',
+        'slvdesborcwsk#.wienkav.at': 'dev#-wsk',
         'slvqesborcwsk#.wienkav.at': 'test#-wsk',
         'slvaesborcwsk#.wienkav.at': 'mig#-wsk',
         'slvpesborcwsk#.wienkav.at': 'prod#-wsk',
 
-		'slvdesborcmag01.host.magwien.gv.at': 'dev01-mag',
+		'slvdesborcmag#.host.magwien.gv.at': 'dev#-mag',
         'slvqesborcmag#.host.magwien.gv.at': 'test#-mag',
         'slvaesborcmag#.host.magwien.gv.at': 'mig#-mag',
         'slvpesborcmag#.host.magwien.gv.at': 'prod#-mag',
 
-		'slvdesborcmag01.routine.akhwien.at': 'dev01-mag',
+		'slvdesborcmag#.routine.akhwien.at': 'dev#-mag',
         'slvqesborcmag#.routine.akhwien.at': 'test#-mag',
         'slvaesborcmag#.routine.akhwien.at': 'mig#-mag',
         'slvpesborcmag#.routine.akhwien.at': 'prod#-mag',
 		
-        'slvmesborc01.wienkav.at': 'ESBQ-1',
-        'slvmesborc02.wienkav.at': 'ESBQ-2',
-        'slvqesborc01.wienkav.at': 'ESBT-1',
-        'slvqesborc02.wienkav.at': 'ESBT-2',
-        'slvpesborc01.wienkav.at': 'ESBP-1',
-        'slvpesborc02.wienkav.at': 'ESBP-2'
+		'svmmgrorc001.wienkav.at': 'esbd',
+        'slvqesborc#.wienkav.at': 'esbt-1',
+        'slvmesborc#.wienkav.at': 'esbq-1',
+        'slvpesborc#.wienkav.at': 'esbp-1'
 	};
 
     const WILDCARD_TOKEN = '#';
