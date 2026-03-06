@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CyberArk Servername Translator
 // @namespace    http://tampermonkey.net/
-// @version      2026-03-06
+// @version      2026-03-07
 // @description  Adds translated short names after known server hostnames in CyberArk tables.
 // @author       Christoph Rettinger
 // @match        https://cyberark.wien.gv.at/*
@@ -61,6 +61,9 @@
     /** Marker attribute to avoid repeatedly processing the same DOM node. */
     const PROCESSED_ATTRIBUTE = 'data-cyberark-translation-applied';
 
+    /** Color used to emphasize the original hostname before the short translation. */
+    const HOSTNAME_COLOR = '#1264C8';
+
     function normalizeHostname(text) {
         return String(text || '').trim().toLowerCase();
     }
@@ -111,7 +114,11 @@
         }
 
         element.replaceChildren();
-        element.appendChild(document.createTextNode(`${hostname} (`));
+        const hostnameElement = document.createElement('span');
+        hostnameElement.textContent = hostname;
+        hostnameElement.style.color = HOSTNAME_COLOR;
+        element.appendChild(hostnameElement);
+        element.appendChild(document.createTextNode(' ('));
         const translationElement = document.createElement('strong');
         translationElement.textContent = translation;
         element.appendChild(translationElement);
