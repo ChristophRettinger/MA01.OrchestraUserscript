@@ -57,3 +57,12 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 The overlay keeps a very high z-index so it remains visible above Elastic modals, and the MessageData controls stay enabled at all times. It waits for the main Kibana container (`.kibana-body`) to appear before rendering so the helper only shows once the shell is ready, yet it still anchors to the document body. The floating panel now sits 80px from the right edge to avoid overlapping built-in controls. If Elastic's copy button is not present, the helper surfaces a toast to explain the missing prerequisite. Feedback toasts mirror the Orchestra styling to confirm each copy.
 
 The helper now locates Elastic's copy control by its visible label (**Copy to clipboard**) rather than the SVG icon so it remains compatible with icon updates in Elastic.
+
+## CyberArk Servername Translator
+
+`CyberArkUserScript.js` targets `https://cyberark.wien.gv.at/` and appends translated short names to known server hostnames inside CyberArk grid cells.
+
+* It scans `span.cyb-grid-cell__text` entries for hostnames (for example `slvmesborc02.wienkav.at`).
+* When a hostname exists in the script translation table, the script rewrites the visible text as `hostname (translation)`.
+* The translation table currently includes `slvmesborc02.wienkav.at → ESBQ` and is intentionally easy to extend when more mappings are provided.
+* Newly rendered rows are handled automatically through a `MutationObserver`, so translations continue to appear while paging or filtering.
