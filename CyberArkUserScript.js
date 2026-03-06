@@ -14,53 +14,31 @@
 
     /**
      * Translation table for known servers.
-     * Extend this object as additional mappings become available.
      *
-     * Example:
+     * The # placeholder can be used in hostname keys and translation values:
+     * - In hostname keys it matches one or more digits (captured in order).
+     * - In translation values each # is replaced with the corresponding capture,
+     *   preserving leading zeros.
+     *
+     * Examples:
      *   "slvmesborc02.wienkav.at": "ESBQ"
+     *   "slvqesborcwsk#.wienkav.at": "test#-wsk"
      */
     const SERVER_TRANSLATIONS = {
         'slvdesborcwsk01.wienkav.at': 'dev01-wsk',
-        'slvqesborcwsk01.wienkav.at': 'test01-wsk',
-        'slvqesborcwsk02.wienkav.at': 'test02-wsk',
-        'slvqesborcwsk03.wienkav.at': 'test03-wsk',
-        'slvqesborcwsk04.wienkav.at': 'test04-wsk',
-        'slvaesborcwsk01.wienkav.at': 'mig01-wsk',
-		'slvaesborcwsk02.wienkav.at': 'mig02-wsk',
-		'slvaesborcwsk03.wienkav.at': 'mig03-wsk',
-		'slvaesborcwsk04.wienkav.at': 'mig04-wsk',		
-        'slvpesborcwsk01.wienkav.at': 'prod01-wsk',
-		'slvpesborcwsk02.wienkav.at': 'prod02-wsk',
-		'slvpesborcwsk03.wienkav.at': 'prod03-wsk',
-		'slvpesborcwsk04.wienkav.at': 'prod04-wsk',
-		
+        'slvqesborcwsk#.wienkav.at': 'test#-wsk',
+        'slvaesborcwsk#.wienkav.at': 'mig#-wsk',
+        'slvpesborcwsk#.wienkav.at': 'prod#-wsk',
+
 		'slvdesborcmag01.host.magwien.gv.at': 'dev01-mag',
-        'slvqesborcmag01.host.magwien.gv.at': 'test01-mag',
-        'slvqesborcmag02.host.magwien.gv.at': 'test02-mag',
-        'slvqesborcmag03.host.magwien.gv.at': 'test03-mag',
-        'slvqesborcmag04.host.magwien.gv.at': 'test04-mag',
-        'slvaesborcmag01.host.magwien.gv.at': 'mig01-mag',
-		'slvaesborcmag02.host.magwien.gv.at': 'mig02-mag',
-		'slvaesborcmag03.host.magwien.gv.at': 'mig03-mag',
-		'slvaesborcmag04.host.magwien.gv.at': 'mig04-mag',		
-        'slvpesborcmag01.host.magwien.gv.at': 'prod01-mag',
-		'slvpesborcmag02.host.magwien.gv.at': 'prod02-mag',
-		'slvpesborcmag03.host.magwien.gv.at': 'prod03-mag',
-		'slvpesborcmag04.host.magwien.gv.at': 'prod04-mag',
-		
+        'slvqesborcmag#.host.magwien.gv.at': 'test#-mag',
+        'slvaesborcmag#.host.magwien.gv.at': 'mig#-mag',
+        'slvpesborcmag#.host.magwien.gv.at': 'prod#-mag',
+
 		'slvdesborcmag01.routine.akhwien.at': 'dev01-mag',
-        'slvqesborcmag01.routine.akhwien.at': 'test01-mag',
-        'slvqesborcmag02.routine.akhwien.at': 'test02-mag',
-        'slvqesborcmag03.routine.akhwien.at': 'test03-mag',
-        'slvqesborcmag04.routine.akhwien.at': 'test04-mag',
-        'slvaesborcmag01.routine.akhwien.at': 'mig01-mag',
-		'slvaesborcmag02.routine.akhwien.at': 'mig02-mag',
-		'slvaesborcmag03.routine.akhwien.at': 'mig03-mag',
-		'slvaesborcmag04.routine.akhwien.at': 'mig04-mag',		
-        'slvpesborcmag01.routine.akhwien.at': 'prod01-mag',
-		'slvpesborcmag02.routine.akhwien.at': 'prod02-mag',
-		'slvpesborcmag03.routine.akhwien.at': 'prod03-mag',
-		'slvpesborcmag04.routine.akhwien.at': 'prod04-mag',
+        'slvqesborcmag#.routine.akhwien.at': 'test#-mag',
+        'slvaesborcmag#.routine.akhwien.at': 'mig#-mag',
+        'slvpesborcmag#.routine.akhwien.at': 'prod#-mag',
 		
         'slvmesborc01.wienkav.at': 'ESBQ-1',
         'slvmesborc02.wienkav.at': 'ESBQ-2',
@@ -69,6 +47,15 @@
         'slvpesborc01.wienkav.at': 'ESBP-1',
         'slvpesborc02.wienkav.at': 'ESBP-2'
 	};
+
+    const WILDCARD_TOKEN = '#';
+
+    const wildcardTranslations = Object.entries(SERVER_TRANSLATIONS)
+        .filter(([hostname]) => hostname.includes(WILDCARD_TOKEN))
+        .map(([hostnameTemplate, translationTemplate]) => ({
+            matcher: buildWildcardMatcher(hostnameTemplate),
+            translationTemplate
+        }));
 
     /** Matches fully-qualified hostnames shown in CyberArk table cells. */
     const HOSTNAME_PATTERN = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
@@ -80,20 +67,59 @@
         return String(text || '').trim().toLowerCase();
     }
 
+    function escapeRegExp(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function buildWildcardMatcher(hostnameTemplate) {
+        const pattern = hostnameTemplate
+            .split(WILDCARD_TOKEN)
+            .map(escapeRegExp)
+            .join('(\\d+)');
+
+        return new RegExp(`^${pattern}$`, 'i');
+    }
+
+    function resolveWildcardTranslation(translationTemplate, matches) {
+        let replacementIndex = 0;
+        return translationTemplate.replace(/#/g, () => {
+            replacementIndex += 1;
+            return matches[replacementIndex] || '';
+        });
+    }
+
     function findTranslation(hostname) {
-        return SERVER_TRANSLATIONS[normalizeHostname(hostname)] || null;
+        const normalizedHostname = normalizeHostname(hostname);
+        const exactMatch = SERVER_TRANSLATIONS[normalizedHostname];
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        for (const { matcher, translationTemplate } of wildcardTranslations) {
+            const matches = normalizedHostname.match(matcher);
+            if (matches) {
+                return resolveWildcardTranslation(translationTemplate, matches);
+            }
+        }
+
+        return null;
     }
 
     function appendTranslation(element, hostname, translation) {
-        const expectedSuffix = ` (${translation})`;
-        if (element.textContent?.includes(expectedSuffix)) {
+        const expectedTranslation = translation;
+        if (element.querySelector('strong')?.textContent === expectedTranslation) {
             element.setAttribute(PROCESSED_ATTRIBUTE, 'true');
             return;
         }
 
-        element.textContent = `${hostname}${expectedSuffix}`;
+        element.replaceChildren();
+        element.appendChild(document.createTextNode(`${hostname} (`));
+        const translationElement = document.createElement('strong');
+        translationElement.textContent = translation;
+        element.appendChild(translationElement);
+        element.appendChild(document.createTextNode(')'));
         element.setAttribute(PROCESSED_ATTRIBUTE, 'true');
-        element.setAttribute('title', `${hostname}${expectedSuffix}`);
+        element.setAttribute('title', `${hostname} (${translation})`);
     }
 
     /**
