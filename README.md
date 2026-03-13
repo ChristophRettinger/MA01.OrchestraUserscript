@@ -53,6 +53,7 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 
 * **Get MessageData1** – default option **formatted** auto-detects whether the payload is JSON or XML before pretty-printing and copying it back to the clipboard. The **raw** option keeps the payload untouched.
 * **Get MessageData2** – mirrors the MessageData1 controls but reads the `MessageData2` field from the Elastic copy payload instead.
+* Every `BusinessCaseId` column entry in Discover now shows a 🔎 icon. Clicking it opens a new browser tab that reuses your current columns but clears all other filters, pins the time range to the last 90 days, and keeps only the clicked BusinessCaseId in the query bar. The icon is injected via a MutationObserver, so it follows pagination and virtualized row updates.
 
 The overlay keeps a very high z-index so it remains visible above Elastic modals, and the MessageData controls stay enabled at all times. It waits for the main Kibana container (`.kibana-body`) to appear before rendering so the helper only shows once the shell is ready, yet it still anchors to the document body. The floating panel now sits 80px from the right edge to avoid overlapping built-in controls. If Elastic's copy button is not present, the helper surfaces a toast to explain the missing prerequisite. Feedback toasts mirror the Orchestra styling to confirm each copy.
 

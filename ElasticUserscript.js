@@ -23,7 +23,15 @@
             /** Class applied to the icon span of the Elastic button. */
             buttonIcon: '.euiButtonEmpty__icon',
             /** Class applied to the text span of the Elastic button. */
-            buttonText: '.euiButtonEmpty__text'
+            buttonText: '.euiButtonEmpty__text',
+            /** Root data grid that holds the Discover table rows. */
+            dataGrid: '[data-test-subj="docTable"]',
+            /** Full cell selector for the BusinessCaseId column. */
+            businessCaseCell: '[data-test-subj="dataGridRowCell"][data-gridcell-column-id="BusinessCaseId"]',
+            /** Span that contains the rendered cell value. */
+            cellValue: '.unifiedDataTable__cellValue',
+            /** Wrapper that stores the datagrid cell content. */
+            cellContent: '[data-datagrid-cellcontent="true"]'
         },
         labels: {
             /** Default label for the helper overlay toggle. */
@@ -39,7 +47,9 @@
             /** Visible label of the Elastic "Copy to clipboard" button. */
             copyButton: 'Copy to clipboard',
             /** Busy label shown while clipboard operations run. */
-            helperBusy: 'Copying MessageData…'
+            helperBusy: 'Copying MessageData…',
+            /** Tooltip for the BusinessCaseId quick-filter icon. */
+            businessCaseDetail: 'Open Discover filtered by BusinessCaseId'
         },
         layout: {
             /** Width of the helper overlay panel. */
@@ -62,6 +72,16 @@
                 error: '#d32f2f'
             }
         },
+        classNames: {
+            /** Wrapper span attached to BusinessCaseId cells. */
+            businessCaseLinkWrapper: 'elastic-helper-bc-link-wrapper',
+            /** Icon button that opens the Discover detail query. */
+            businessCaseLinkButton: 'elastic-helper-bc-link-button'
+        },
+        businessCaseLink: {
+            /** Icon hinting at “details” for the BusinessCaseId quick filter. */
+            icon: '🔎'
+        },
         /** Delay (in ms) before the clipboard JSON is read. */
         clipboardReadDelayMs: 200,
         /** Maximum number of attempts to fetch and parse the clipboard JSON. */
@@ -70,7 +90,17 @@
 
     const STATE = {
         /** Reference to the helper overlay so we create it only once. */
-        helperPanel: null
+        helperPanel: null,
+        /** Active MutationObserver for BusinessCaseId cells. */
+        businessCaseObserver: null,
+        /** Tracks whether a BusinessCaseId refresh is already queued. */
+        businessCaseUpdateScheduled: false,
+        /** requestAnimationFrame handle for pending BusinessCaseId updates. */
+        businessCaseRaf: null,
+        /** Latest grid root that needs a BusinessCaseId refresh. */
+        businessCaseLatestRoot: null,
+        /** Ensures the hashchange listener is registered only once. */
+        businessCaseHashListenerAttached: false
     };
 
     /** Utility helper that waits for a number of milliseconds. */
@@ -260,6 +290,287 @@
 
     const toastService = createToastService();
     const showToast = (...args) => toastService.show(...args);
+
+    /** Parses the current Discover hash and exposes its path plus search params. */
+    function parseDiscoverHashParams() {
+        const hash = window.location.hash || '';
+        const questionMarkIndex = hash.indexOf('?');
+        if (questionMarkIndex === -1) {
+            return null;
+        }
+        const path = hash.slice(0, questionMarkIndex);
+        const queryString = hash.slice(questionMarkIndex + 1);
+        return {
+            path,
+            params: new URLSearchParams(queryString)
+        };
+    }
+
+    /** Finds the index of the closing parenthesis while ignoring quoted segments. */
+    function findMatchingParenthesis(input, openIndex) {
+        let depth = 1;
+        let inQuotes = false;
+        for (let i = openIndex + 1; i < input.length; i += 1) {
+            const char = input[i];
+            if (char === "'" && input[i - 1] !== '!') {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (inQuotes) {
+                continue;
+            }
+            if (char === '(') {
+                depth += 1;
+            } else if (char === ')') {
+                depth -= 1;
+                if (depth === 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Replaces the `language:...,query:'...'` part of the Discover `_a` state so the
+     * filter keeps its existing query container but points at the requested value.
+     */
+    function replaceQueryInAppState(appState, queryValue) {
+        const defaultToken = 'query:(';
+        const scopedToken = 'interval:auto,query:(';
+        let token = defaultToken;
+        let startIndex = appState.indexOf(scopedToken);
+        if (startIndex !== -1) {
+            token = scopedToken;
+        } else {
+            startIndex = appState.indexOf(defaultToken);
+        }
+        if (startIndex === -1) {
+            return appState;
+        }
+        const openIndex = startIndex + token.length - 1;
+        const closeIndex = findMatchingParenthesis(appState, openIndex);
+        if (closeIndex === -1) {
+            return appState;
+        }
+        const innerContent = appState.slice(openIndex + 1, closeIndex);
+        const languageMatch = innerContent.match(/language:([^,')\s]+)/);
+        const languageValue = languageMatch ? languageMatch[1] : 'kuery';
+        const replacement = `${token}language:${languageValue},query:'${queryValue}')`;
+        return `${appState.slice(0, startIndex)}${replacement}${appState.slice(closeIndex + 1)}`;
+    }
+
+    /** Removes all Discover filters so only the BusinessCaseId query remains. */
+    function resetFiltersInAppState(appState) {
+        const token = 'filters:';
+        const startIndex = appState.indexOf(token);
+        if (startIndex === -1) {
+            return appState;
+        }
+        let cursor = startIndex + token.length;
+        if (appState[cursor] === '!') {
+            cursor += 1;
+        }
+        if (appState[cursor] !== '(') {
+            return appState;
+        }
+        const openIndex = cursor;
+        const closeIndex = findMatchingParenthesis(appState, openIndex);
+        if (closeIndex === -1) {
+            return appState;
+        }
+        const replacement = 'filters:!()';
+        return `${appState.slice(0, startIndex)}${replacement}${appState.slice(closeIndex + 1)}`;
+    }
+
+    /** Forces the global time range to the last 90 days regardless of the current selection. */
+    function enforceLast90Days(globalState) {
+        const desiredTime = 'time:(from:now-90d/d,to:now)';
+        if (!globalState) {
+            return `(${desiredTime})`;
+        }
+        const token = 'time:(';
+        const startIndex = globalState.indexOf(token);
+        if (startIndex === -1) {
+            const closingIndex = globalState.lastIndexOf(')');
+            if (closingIndex === -1) {
+                return `${globalState},${desiredTime}`;
+            }
+            return `${globalState.slice(0, closingIndex)},${desiredTime}${globalState.slice(closingIndex)}`;
+        }
+        const openIndex = startIndex + token.length - 1;
+        const closeIndex = findMatchingParenthesis(globalState, openIndex);
+        if (closeIndex === -1) {
+            return `${globalState},${desiredTime}`;
+        }
+        return `${globalState.slice(0, startIndex)}${desiredTime}${globalState.slice(closeIndex + 1)}`;
+    }
+
+    /**
+     * Builds a Discover URL that keeps the current columns/filters but swaps the query
+     * so the table only shows rows for the selected BusinessCaseId.
+     */
+    function buildBusinessCaseDiscoverUrl(businessCaseId) {
+        const parsed = parseDiscoverHashParams();
+        if (!parsed) {
+            return null;
+        }
+        const sanitized = (businessCaseId ?? '').trim();
+        if (!sanitized) {
+            return null;
+        }
+        const escapedValue = sanitized.replace(/'/g, "''");
+        const appState = parsed.params.get('_a');
+        if (!appState) {
+            return null;
+        }
+        const filterQuery = `BusinessCaseId :${escapedValue}`;
+        const queryOnlyState = replaceQueryInAppState(appState, filterQuery);
+        const nextAppState = resetFiltersInAppState(queryOnlyState);
+        const nextParams = new URLSearchParams(parsed.params);
+        nextParams.set('_a', nextAppState);
+        const globalState = parsed.params.get('_g');
+        const nextGlobalState = enforceLast90Days(globalState);
+        if (nextGlobalState) {
+            nextParams.set('_g', nextGlobalState);
+        }
+        const baseUrl = `${window.location.origin}${window.location.pathname}`;
+        const hashPath = parsed.path || '#';
+        return `${baseUrl}${hashPath}?${nextParams.toString()}`;
+    }
+
+    /** Creates the actual icon-sized button that opens Discover in a new tab. */
+    function createBusinessCaseLinkButton(businessCaseId) {
+        const button = createElement('button', {
+            attributes: {
+                type: 'button',
+                title: CONFIG.labels.businessCaseDetail,
+                'aria-label': `${CONFIG.labels.businessCaseDetail}: ${businessCaseId}`
+            },
+            textContent: CONFIG.businessCaseLink.icon
+        });
+        applyStyles(button, {
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            padding: '0 2px',
+            marginLeft: '6px',
+            fontSize: '12px',
+            lineHeight: '1',
+            display: 'inline-flex',
+            alignItems: 'center'
+        });
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            const targetUrl = buildBusinessCaseDiscoverUrl(businessCaseId);
+            if (!targetUrl) {
+                showToast('Unable to build the BusinessCaseId quick filter URL.', { type: 'error' });
+                return;
+            }
+            window.open(targetUrl, '_blank', 'noopener');
+        });
+        return button;
+    }
+
+    /** Ensures every BusinessCaseId cell holds the quick-filter icon button. */
+    function decorateBusinessCaseCells(root) {
+        if (!root) {
+            return;
+        }
+        const cells = root.querySelectorAll(CONFIG.selectors.businessCaseCell);
+        cells.forEach((cell) => {
+            const valueElement = cell.querySelector(CONFIG.selectors.cellValue);
+            const rawValue = valueElement?.textContent ?? '';
+            const businessCaseId = rawValue.trim();
+            const existingWrapper = cell.querySelector(`.${CONFIG.classNames.businessCaseLinkWrapper}`);
+
+            if (!businessCaseId) {
+                if (existingWrapper) {
+                    existingWrapper.remove();
+                }
+                return;
+            }
+
+            const existingButton = cell.querySelector(`.${CONFIG.classNames.businessCaseLinkButton}`);
+            if (existingButton?.getAttribute('data-business-case-id') === businessCaseId) {
+                return;
+            }
+
+            if (existingWrapper) {
+                existingWrapper.remove();
+            }
+
+            const contentHost = cell.querySelector(CONFIG.selectors.cellContent);
+            if (!contentHost) {
+                return;
+            }
+
+            const wrapper = createElement('span', {
+                attributes: { class: CONFIG.classNames.businessCaseLinkWrapper }
+            });
+            applyStyles(wrapper, {
+                display: 'inline-flex',
+                alignItems: 'center',
+                marginRight: '4px'
+            });
+
+            const button = createBusinessCaseLinkButton(businessCaseId);
+            button.classList.add(CONFIG.classNames.businessCaseLinkButton);
+            button.setAttribute('data-business-case-id', businessCaseId);
+            wrapper.appendChild(button);
+            if (valueElement && valueElement.parentElement === contentHost) {
+                contentHost.insertBefore(wrapper, valueElement);
+            } else {
+                contentHost.prepend(wrapper);
+            }
+        });
+    }
+
+    /** Debounces refresh requests so frequent grid updates stay cheap. */
+    function scheduleBusinessCaseDecoration(root) {
+        if (!root) {
+            return;
+        }
+        STATE.businessCaseLatestRoot = root;
+        if (STATE.businessCaseUpdateScheduled) {
+            return;
+        }
+        STATE.businessCaseUpdateScheduled = true;
+        if (STATE.businessCaseRaf !== null) {
+            window.cancelAnimationFrame(STATE.businessCaseRaf);
+        }
+        STATE.businessCaseRaf = window.requestAnimationFrame(() => {
+            STATE.businessCaseUpdateScheduled = false;
+            STATE.businessCaseRaf = null;
+            if (STATE.businessCaseLatestRoot) {
+                decorateBusinessCaseCells(STATE.businessCaseLatestRoot);
+            }
+        });
+    }
+
+    /** Hooks a MutationObserver into the Discover data grid for ongoing updates. */
+    function initializeBusinessCaseLinks() {
+        waitForElement(CONFIG.selectors.dataGrid)
+            .then((grid) => {
+                scheduleBusinessCaseDecoration(grid);
+                if (STATE.businessCaseObserver) {
+                    STATE.businessCaseObserver.disconnect();
+                }
+                STATE.businessCaseObserver = new MutationObserver(() => scheduleBusinessCaseDecoration(grid));
+                STATE.businessCaseObserver.observe(grid, { childList: true, subtree: true });
+
+                if (!STATE.businessCaseHashListenerAttached) {
+                    window.addEventListener('hashchange', () => {
+                        initializeBusinessCaseLinks();
+                    });
+                    STATE.businessCaseHashListenerAttached = true;
+                }
+            })
+            .catch((error) => {
+                console.warn('[ElasticUserscript] docTable grid not detected; BusinessCaseId links disabled.', error);
+            });
+    }
 
     /**
      * Reads the clipboard and extracts the requested MessageData field.
@@ -727,7 +1038,10 @@
 
     function init() {
         waitForElement('#kibana-body')
-            .then(() => initializeOverlay())
+            .then(() => {
+                initializeOverlay();
+                initializeBusinessCaseLinks();
+            })
             .catch((error) => {
                 console.warn(
                     '[ElasticUserscript] kibana-body container not detected; helper overlay not created.',
