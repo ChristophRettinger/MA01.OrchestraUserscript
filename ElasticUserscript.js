@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elastic Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-22
+// @version      2026-03-27
 // @description  Adds a helper overlay for copying MessageData fields from the Elastic page clipboard JSON.
 // @author       Christoph Rettinger
 // @match        https://kb-obs.apps.zeus.wien.at/app/*
@@ -61,6 +61,10 @@
             /** Z-index applied to the helper overlay to stay above Elastic modals. */
             zIndex: 2147483647
         },
+        shortcuts: {
+            /** Keyboard shortcut used to expand/collapse the helper overlay. */
+            toggleOverlayKey: 'F9'
+        },
         toast: {
             /** Default duration (in ms) before non-persistent toasts fade out. */
             defaultDurationMs: 3000,
@@ -91,6 +95,8 @@
     const STATE = {
         /** Reference to the helper overlay so we create it only once. */
         helperPanel: null,
+        /** Tracks whether the overlay keyboard shortcut has been registered. */
+        overlayShortcutAttached: false,
         /** Active MutationObserver for BusinessCaseId cells. */
         businessCaseObserver: null,
         /** Tracks whether a BusinessCaseId refresh is already queued. */
@@ -689,8 +695,7 @@
                 transition: 'background 0.2s ease'
             });
             this.toggleButton.addEventListener('click', () => {
-                this.collapsed = !this.collapsed;
-                this.applyState();
+                this.toggleCollapsed();
             });
 
             this.content = createElement('div', {
@@ -771,6 +776,23 @@
                 });
                 this.toggleButton.textContent = CONFIG.layout.collapsedIcon;
             }
+        }
+
+        setCollapsed(collapsed) {
+            const normalized = Boolean(collapsed);
+            if (this.collapsed === normalized) {
+                return;
+            }
+            this.collapsed = normalized;
+            this.applyState();
+        }
+
+        toggleCollapsed() {
+            this.setCollapsed(!this.collapsed);
+        }
+
+        isCollapsed() {
+            return this.collapsed;
         }
 
         addActionGroup({ label, icon, options, defaultOptionId }) {
@@ -955,6 +977,52 @@
         return STATE.helperPanel;
     }
 
+    /**
+     * Returns true when the provided element represents an editable field so keyboard shortcuts can defer to the user.
+     */
+    function isEditableTarget(element) {
+        if (!(element instanceof HTMLElement)) {
+            return false;
+        }
+        const tagName = element.tagName?.toUpperCase();
+        if (tagName && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) {
+            return true;
+        }
+        return element.isContentEditable || Boolean(element.closest('[contenteditable=\"true\"]'));
+    }
+
+    /**
+     * Hooks the F9 shortcut that toggles the helper overlay without requiring a mouse click.
+     */
+    function registerOverlayKeyboardShortcut(panel) {
+        if (!panel || STATE.overlayShortcutAttached) {
+            return;
+        }
+
+        const handler = (event) => {
+            if (
+                event.key !== CONFIG.shortcuts.toggleOverlayKey ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.shiftKey
+            ) {
+                return;
+            }
+
+            const target = event.target instanceof HTMLElement ? event.target : document.activeElement;
+            if (isEditableTarget(target)) {
+                return;
+            }
+
+            event.preventDefault();
+            panel.toggleCollapsed();
+        };
+
+        document.addEventListener('keydown', handler);
+        STATE.overlayShortcutAttached = true;
+    }
+
     const isVisible = (element) => Boolean(element && element.getClientRects().length > 0);
 
     // Elastic swapped the copy icon, so we now resolve the button by its visible label instead of the SVG.
@@ -1008,6 +1076,7 @@
         if (!panel) {
             return;
         }
+        registerOverlayKeyboardShortcut(panel);
 
         const messageDataGroup = panel.addActionGroup({
             label: CONFIG.labels.messageData1,

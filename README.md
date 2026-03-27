@@ -41,6 +41,8 @@ The **Copy Scenario names** helper follows the selected rows on the Scenario ove
 
 The buttons live inside a collapsible panel pinned near the top right of the header so the toggle remains visible even when overlays appear. The panel starts collapsed to stay out of the way by default and uses a colour-coded toggle button (light grey when collapsed, deep blue when expanded). The toggle now shows only the wrench icon to save vertical space while keeping the controls recognizable. Expanding the panel restores the full list of helper buttons without adding an extra header row.
 
+Press **F9** to expand or collapse the Orchestra helper overlay without touching the mouse. The shortcut is ignored while focus is inside inputs, textareas, or other editable controls so form interactions remain uninterrupted.
+
 Actions are grouped into split buttons: the main button triggers the default behaviour while the adjacent ellipsis opens a dropdown with every available format. Icons remain in place to keep each action recognizable at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
 
 ## Development Notes
@@ -49,7 +51,7 @@ The script is structured around a central `CONFIG` object that keeps selectors, 
 
 ## Elastic MessageData Copier
 
-`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/` with a floating overlay similar to the Orchestra helper panel. Open a detail drawer and the overlay (top right) exposes grouped split buttons for MessageData actions:
+`ElasticUserscript.js` enhances the Elastic Observability UI at `https://kb-obs.apps.zeus.wien.at/app/` with a floating overlay similar to the Orchestra helper panel. Press **F9** to open or collapse the overlay without leaving the keyboard; the shortcut is ignored while focus is inside inputs or other editable controls so form interactions continue to work. Open a detail drawer and the overlay (top right) exposes grouped split buttons for MessageData actions:
 
 * **Get MessageData1** – default option **formatted** auto-detects whether the payload is JSON or XML before pretty-printing and copying it back to the clipboard. The **raw** option keeps the payload untouched.
 * **Get MessageData2** – mirrors the MessageData1 controls but reads the `MessageData2` field from the Elastic copy payload instead.

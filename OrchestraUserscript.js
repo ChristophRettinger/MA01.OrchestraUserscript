@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orchestra Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-23
+// @version      2026-03-27
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
@@ -53,6 +53,10 @@
             collapsedSize: 26,
             zIndex: 2147483647
         },
+        shortcuts: {
+            /** Keyboard shortcut used to expand/collapse the helper overlay. */
+            toggleOverlayKey: 'F9'
+        },
         colors: {
             buttonEnabled: '#cbe5ff',
             buttonDisabled: '#d6d6d6',
@@ -78,7 +82,8 @@
     };
 
     const state = {
-        helperPanel: null
+        helperPanel: null,
+        overlayShortcutAttached: false
     };
 
     const MSGID_LABELS = ['_MSGID'];
@@ -111,6 +116,18 @@
             view: window
         }));
     };
+
+    // Prevents helper keyboard shortcuts from intercepting text input.
+    function isEditableTarget(element) {
+        if (!(element instanceof HTMLElement)) {
+            return false;
+        }
+        const tagName = element.tagName?.toUpperCase();
+        if (tagName && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) {
+            return true;
+        }
+        return element.isContentEditable || Boolean(element.closest('[contenteditable="true"]'));
+    }
 
     function applyStyles(element, ...styles) {
         styles.filter(Boolean).forEach((style) => Object.assign(element.style, style));
@@ -607,8 +624,7 @@
                 transition: 'background 0.2s ease'
             });
             this.toggleButton.addEventListener('click', () => {
-                this.collapsed = !this.collapsed;
-                this.applyState();
+                this.toggle();
             });
 
             this.content = createElement('div', {
@@ -689,6 +705,15 @@
                 });
                 this.toggleButton.textContent = CONFIG.panel.collapsedIcon;
             }
+        }
+
+        toggle(forceExpanded) {
+            if (typeof forceExpanded === 'boolean') {
+                this.collapsed = !forceExpanded;
+            } else {
+                this.collapsed = !this.collapsed;
+            }
+            this.applyState();
         }
 
         addButton({ label, icon, onClick, isActionAvailable }) {
@@ -1740,6 +1765,41 @@
         return panel.addActionGroup(config);
     }
 
+    // Allows toggling the helper overlay via keyboard shortcut (F9 by default).
+    function registerHelperPanelShortcuts() {
+        if (state.overlayShortcutAttached) {
+            return;
+        }
+
+        const handler = (event) => {
+            if (
+                event.key !== CONFIG.shortcuts.toggleOverlayKey ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.shiftKey ||
+                event.repeat
+            ) {
+                return;
+            }
+
+            const target = event.target instanceof HTMLElement ? event.target : document.activeElement;
+            if (isEditableTarget(target)) {
+                return;
+            }
+
+            if (!state.helperPanel) {
+                return;
+            }
+
+            event.preventDefault();
+            state.helperPanel.toggle();
+        };
+
+        document.addEventListener('keydown', handler);
+        state.overlayShortcutAttached = true;
+    }
+
     function initializeHelperPanel() {
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
             const host = document.body; // must be body due to iframe constraints
@@ -1837,4 +1897,5 @@
 
     console.log('Orchestra Helper Functions loaded');
     initializeHelperPanel();
+    registerHelperPanelShortcuts();
 })();
