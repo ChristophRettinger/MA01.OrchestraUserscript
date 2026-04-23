@@ -10,8 +10,8 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * The helper clears stale Business view filters, fills the MSGID filter, and tries to keep the clipboard in sync with the searched value.
 
 * Copy MSGIDs
-  * Default action: **As Table** – copies the selected rows' MSGIDs from column 9 with a `MSGID` header and line-feed separated rows.
-  * Further options: **As List** (single line, comma separated), **As Plain** (same list without the header line), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
+  * Default action: **As Plain** – copies the selected rows' MSGIDs from column 9 as a plain line-feed separated list without headers.
+  * Further options: **As Table** (with `MSGID` header), **As List** (single line, comma separated), and **As Elastic search** (e.g. `(BusinessCaseId:ID1 or BusinessCaseId:ID2)`).
   * Duplicate MSGIDs are still removed automatically so each list stays tidy.
   * Selecting multiple rows keeps the helper enabled so you can export MSGIDs from every highlighted row at once.
 
@@ -31,6 +31,12 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * Startup extraction now honours only the currently selected rows and snapshots that list before opening any dialogs, keeping later row highlights from changing the processed set.
   * The cancellable progress toast remains in place while opening each row's Startup window.
 
+* Find referenced row
+  * Selects the related process row for restart chains in either direction.
+  * If the selected row contains `Created as copy of V:...`, the helper selects that referenced source row.
+  * If the selected row is the source row, the helper finds the copied/restarted row that references it.
+  * The command is always enabled; when no relation is found, a warning toast is shown.
+
 ## Availability
 
 The MSGID and Business Key helpers become active only on the process overview page (`#scenario/processOverview/`), when at least one process row is available, and while the "Details" or "Business view" tab is selected. In all other cases those buttons stay greyed out to prevent running the helpers without data. The MSGID helpers also activate when the scenario detail window contains an MSGID, so you can work with values that are not exposed in the list yet. If no MSGID can be resolved a warning toast explains which prerequisites are missing.
@@ -41,9 +47,9 @@ The **Copy Scenario names** helper follows the selected rows on the Scenario ove
 
 The buttons live inside a collapsible panel pinned near the top right of the header so the toggle remains visible even when overlays appear. The panel starts collapsed to stay out of the way by default and uses a colour-coded toggle button (light grey when collapsed, deep blue when expanded). The toggle now shows only the wrench icon to save vertical space while keeping the controls recognizable. Expanding the panel restores the full list of helper buttons without adding an extra header row.
 
-Press **F9** to expand or collapse the Orchestra helper overlay without touching the mouse. The shortcut is ignored while focus is inside inputs, textareas, or other editable controls so form interactions remain uninterrupted.
+Press **F9** to expand or collapse the Orchestra helper overlay without touching the mouse. Additional shortcuts: **Shift+F12** (Search by MSGID from selection), **Ctrl+M** (Copy MSGID as plain), **Ctrl+K** (Extract Business Keys as table), and **Shift+F11** (Find referenced row). The shortcuts are ignored while focus is inside inputs, textareas, or other editable controls so form interactions remain uninterrupted.
 
-Actions are grouped into split buttons: the main button triggers the default behaviour while the adjacent ellipsis opens a dropdown with every available format. Icons remain in place to keep each action recognizable at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
+Actions are grouped into split buttons: the main button triggers the default behaviour while the adjacent ellipsis opens a dropdown with every available format. Hovering a command shows its keyboard shortcut where available. Icons remain in place to keep each action recognizable at a glance. The panel keeps a very high z-index so it remains clickable even when modal windows such as the scenario detail are open.
 
 ## Development Notes
 
