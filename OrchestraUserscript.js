@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orchestra Helper Functions
 // @namespace    http://tampermonkey.net/
-// @version      2026-03-27
+// @version      2026-04-23
 // @description  try to take over the world!
 // @author       Christoph Rettinger
 // @match        https://*.esb.wienkav.at:*/orchestra/*
@@ -55,7 +55,11 @@
         },
         shortcuts: {
             /** Keyboard shortcut used to expand/collapse the helper overlay. */
-            toggleOverlayKey: 'F9'
+            toggleOverlayKey: 'F9',
+            searchByMsgIdFromSelection: { key: 'F12', shiftKey: true },
+            copyMsgIdAsPlain: { key: 'm', ctrlKey: true },
+            extractBusinessKeysAsTable: { key: 'k', ctrlKey: true },
+            findReferencedRow: { key: 'F11', shiftKey: true }
         },
         colors: {
             buttonEnabled: '#cbe5ff',
@@ -103,6 +107,8 @@
         scenarioDetail: 'scenario detail'
     };
     const SEARCH_MSGID_LABEL = 'Search MSGID';
+    const PROCESS_REFERENCE_COLUMN_INDEX = 5;
+    const PROCESS_NOTE_COLUMN_INDEX = 18;
 
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -716,13 +722,13 @@
             this.applyState();
         }
 
-        addButton({ label, icon, onClick, isActionAvailable }) {
+        addButton({ label, icon, onClick, isActionAvailable, isEnabled, title }) {
             if (typeof onClick !== 'function') {
                 throw new TypeError('onClick handler must be a function.');
             }
 
             const button = createElement('button', {
-                attributes: { type: 'button' }
+                attributes: { type: 'button', title: title || '' }
             });
             applyStyles(button, {
                 border: '1px solid black',
@@ -760,6 +766,7 @@
             const controller = {
                 element: button,
                 isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
+                isEnabled: typeof isEnabled === 'function' ? isEnabled : null,
                 setEnabled(value) {
                     enabled = Boolean(value);
                     button.disabled = !enabled;
@@ -793,7 +800,7 @@
             return controller;
         }
 
-        addActionGroup({ label, icon, defaultOptionId, options, isActionAvailable, isEnabled }) {
+        addActionGroup({ label, icon, defaultOptionId, options, isActionAvailable, isEnabled, title, shortcutTitle }) {
             if (!Array.isArray(options) || options.length === 0) {
                 throw new TypeError('options must be a non-empty array.');
             }
@@ -815,7 +822,7 @@
             let currentDefault = optionMap.get(defaultOptionId) || optionMap.values().next().value;
 
             const mainButton = createElement('button', {
-                attributes: { type: 'button' }
+                attributes: { type: 'button', title: title || '' }
             });
             applyStyles(mainButton, {
                 border: '1px solid black',
@@ -882,6 +889,10 @@
                 justifyContent: 'center',
                 fontWeight: 'bold'
             });
+
+            if (shortcutTitle) {
+                dropdownToggle.setAttribute('title', shortcutTitle);
+            }
 
             const dropdown = createElement('div');
             applyStyles(dropdown, {
@@ -982,6 +993,17 @@
                 element: host,
                 isActionAvailable: typeof isActionAvailable === 'function' ? isActionAvailable : null,
                 isEnabled: typeof isEnabled === 'function' ? isEnabled : null,
+                runShortcut(optionId) {
+                    if (!enabled || (this.isActionAvailable && !this.isActionAvailable())) {
+                        return false;
+                    }
+                    const option = optionMap.get(optionId);
+                    if (!option || typeof option.onSelect !== 'function') {
+                        return false;
+                    }
+                    option.onSelect();
+                    return true;
+                },
                 setEnabled(value) {
                     enabled = Boolean(value);
                     const baseStyles = {
@@ -1049,6 +1071,134 @@
             return false;
         }
         return text.includes('details') || BUSINESS_VIEW_LABELS.some((label) => text.includes(label));
+    }
+
+
+    const normalizeWhitespaceText = (value) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '');
+
+    function getProcessIdFromRow(row) {
+        const processIdCell = getColumnCell(row, PROCESS_REFERENCE_COLUMN_INDEX);
+        return normalizeWhitespaceText(processIdCell?.textContent || '');
+    }
+
+    function getProcessReferenceNoteFromRow(row) {
+        const noteCell = getColumnCell(row, PROCESS_NOTE_COLUMN_INDEX);
+        return normalizeWhitespaceText(noteCell?.textContent || '');
+    }
+
+    function findReferencedProcessIdInNote(noteText) {
+        if (!noteText) {
+            return null;
+        }
+        const copyMatch = noteText.match(/Created\s+as\s+copy\s+of\s+(V:[^\s\]]+)/i);
+        if (!copyMatch) {
+            return null;
+        }
+        return normalizeWhitespaceText(copyMatch[1]);
+    }
+
+    function selectOnlyRow(row) {
+        if (!row) {
+            return;
+        }
+        const targetCell = row.querySelector('.mTable-data-cell, td') || row;
+        dispatchMouseClick(targetCell);
+    }
+
+    function findRowByProcessId(processId, excludedRows = new Set()) {
+        if (!processId) {
+            return null;
+        }
+        return Array.from(document.querySelectorAll(CONFIG.selectors.rows)).find((row) => {
+            if (excludedRows.has(row)) {
+                return false;
+            }
+            return getProcessIdFromRow(row) === processId;
+        }) || null;
+    }
+
+    function findReferencingRow(targetProcessId, excludedRows = new Set()) {
+        if (!targetProcessId) {
+            return null;
+        }
+        return Array.from(document.querySelectorAll(CONFIG.selectors.rows)).find((row) => {
+            if (excludedRows.has(row)) {
+                return false;
+            }
+            const noteText = getProcessReferenceNoteFromRow(row);
+            const referencedProcessId = findReferencedProcessIdInNote(noteText);
+            return referencedProcessId === targetProcessId;
+        }) || null;
+    }
+
+    function findReferencedRow() {
+        const selectedRows = getSelectedRows();
+        if (!selectedRows.length) {
+            showToast('Select a row first to find its referenced process.', { type: 'warning' });
+            return;
+        }
+
+        const selectedRow = selectedRows[0];
+        const selectedProcessId = getProcessIdFromRow(selectedRow);
+        const selectedNote = getProcessReferenceNoteFromRow(selectedRow);
+        const referencedProcessId = findReferencedProcessIdInNote(selectedNote);
+
+        let targetRow = null;
+        if (referencedProcessId) {
+            targetRow = findRowByProcessId(referencedProcessId, new Set(selectedRows));
+        }
+
+        if (!targetRow && selectedProcessId) {
+            targetRow = findReferencingRow(selectedProcessId, new Set(selectedRows));
+        }
+
+        if (!targetRow) {
+            showToast('No referenced row found for the current selection.', { type: 'warning' });
+            return;
+        }
+
+        selectOnlyRow(targetRow);
+        const targetProcessId = getProcessIdFromRow(targetRow) || 'unknown process';
+        showToast(`Selected referenced row: ${targetProcessId}.`, { type: 'success' });
+    }
+
+    function shortcutToLabel(shortcut) {
+        if (!shortcut) {
+            return '';
+        }
+        const parts = [];
+        if (shortcut.ctrlKey) {
+            parts.push('Ctrl');
+        }
+        if (shortcut.altKey) {
+            parts.push('Alt');
+        }
+        if (shortcut.metaKey) {
+            parts.push('Meta');
+        }
+        if (shortcut.shiftKey) {
+            parts.push('Shift');
+        }
+        const keyLabel = shortcut.key?.length === 1 ? shortcut.key.toUpperCase() : shortcut.key;
+        if (keyLabel) {
+            parts.push(keyLabel);
+        }
+        return parts.join('+');
+    }
+
+    function matchesShortcut(event, shortcut) {
+        if (!shortcut) {
+            return false;
+        }
+        const eventKey = event.key?.length === 1 ? event.key.toLowerCase() : event.key;
+        const shortcutKey = shortcut.key?.length === 1 ? shortcut.key.toLowerCase() : shortcut.key;
+        return (
+            eventKey === shortcutKey &&
+            Boolean(event.ctrlKey) === Boolean(shortcut.ctrlKey) &&
+            Boolean(event.shiftKey) === Boolean(shortcut.shiftKey) &&
+            Boolean(event.altKey) === Boolean(shortcut.altKey) &&
+            Boolean(event.metaKey) === Boolean(shortcut.metaKey)
+        );
     }
 
     const parseSubflRow = (row) => {
@@ -1765,35 +1915,42 @@
         return panel.addActionGroup(config);
     }
 
-    // Allows toggling the helper overlay via keyboard shortcut (F9 by default).
-    function registerHelperPanelShortcuts() {
+    // Allows toggling the helper overlay via keyboard shortcuts.
+    function registerHelperPanelShortcuts(shortcutHandlers) {
         if (state.overlayShortcutAttached) {
             return;
         }
 
+        const handlers = Array.isArray(shortcutHandlers) ? shortcutHandlers : [];
         const handler = (event) => {
-            if (
-                event.key !== CONFIG.shortcuts.toggleOverlayKey ||
-                event.altKey ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey ||
-                event.repeat
-            ) {
-                return;
-            }
-
             const target = event.target instanceof HTMLElement ? event.target : document.activeElement;
-            if (isEditableTarget(target)) {
+            if (isEditableTarget(target) || event.repeat) {
                 return;
             }
 
-            if (!state.helperPanel) {
+            if (
+                matchesShortcut(event, { key: CONFIG.shortcuts.toggleOverlayKey }) &&
+                !event.altKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.shiftKey
+            ) {
+                if (!state.helperPanel) {
+                    return;
+                }
+                event.preventDefault();
+                state.helperPanel.toggle();
                 return;
             }
 
-            event.preventDefault();
-            state.helperPanel.toggle();
+            for (const shortcutHandler of handlers) {
+                if (!matchesShortcut(event, shortcutHandler.shortcut)) {
+                    continue;
+                }
+                event.preventDefault();
+                shortcutHandler.handler();
+                return;
+            }
         };
 
         document.addEventListener('keydown', handler);
@@ -1801,12 +1958,15 @@
     }
 
     function initializeHelperPanel() {
+
         waitForElement(CONFIG.selectors.buttonParent).then((parent) => {
             const host = document.body; // must be body due to iframe constraints
             const searchMsgIdGroup = addActionGroup(host, {
                 label: 'Search by MSGID',
                 icon: '🔎',
                 defaultOptionId: 'selection',
+                title: `Search by MSGID (${shortcutToLabel(CONFIG.shortcuts.searchByMsgIdFromSelection)})`,
+                shortcutTitle: 'Choose format',
                 options: [
                     { id: 'selection', label: 'from selection', onSelect: searchMsgIdFromSelection },
                     { id: 'clipboard', label: 'from clipboard', onSelect: searchMsgIdFromClipboard }
@@ -1816,7 +1976,9 @@
             const copyMsgIdsGroup = addActionGroup(host, {
                 label: 'Copy MSGIDs',
                 icon: '📋',
-                defaultOptionId: 'table',
+                defaultOptionId: 'plain',
+                title: `Copy MSGIDs (${shortcutToLabel(CONFIG.shortcuts.copyMsgIdAsPlain)})`,
+                shortcutTitle: 'Choose format',
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyMsgIdsAsTab },
                     /*{ id: 'csv', label: 'As CSV', onSelect: copyMsgIdsAsCsv },*/
@@ -1831,6 +1993,8 @@
                 label: 'Extract Business Keys',
                 icon: '🔑',
                 defaultOptionId: 'table',
+                title: `Extract Business Keys (${shortcutToLabel(CONFIG.shortcuts.extractBusinessKeysAsTable)})`,
+                shortcutTitle: 'Choose format',
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyBusinessKeysAsTab },
                     { id: 'csv', label: 'as CSV', onSelect: copyBusinessKeysAsCsv },
@@ -1843,6 +2007,8 @@
                 label: 'Get Startup Info',
                 icon: '↪',
                 defaultOptionId: 'table',
+                title: 'Get Startup Info',
+                shortcutTitle: 'Choose format',
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyStartupInfoAsTab },
                     { id: 'list', label: 'as list', onSelect: copyStartupInfoAsList },
@@ -1856,6 +2022,8 @@
                 label: 'Copy Scenario names',
                 icon: '🏷️',
                 defaultOptionId: 'table',
+                title: 'Copy Scenario names',
+                shortcutTitle: 'Choose format',
                 options: [
                     { id: 'table', label: 'as table', onSelect: copyScenarioNamesAsTab },
                     { id: 'csv', label: 'as CSV', onSelect: copyScenarioNamesAsCsv },
@@ -1865,11 +2033,38 @@
                 isEnabled: canCopyScenarioNames
             });
 
-            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup, copyScenarioNamesGroup].filter(Boolean);
+            const findReferencedRowButton = addButton(host, {
+                label: 'Find referenced row',
+                icon: '🔁',
+                title: `Find referenced row (${shortcutToLabel(CONFIG.shortcuts.findReferencedRow)})`,
+                onClick: findReferencedRow,
+                isEnabled: () => true
+            });
+
+            const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup, copyScenarioNamesGroup, findReferencedRowButton].filter(Boolean);
 
             if (!buttons.length) {
                 return;
             }
+
+            const shortcutHandlers = [
+                {
+                    shortcut: CONFIG.shortcuts.searchByMsgIdFromSelection,
+                    handler: () => searchMsgIdGroup?.runShortcut?.('selection')
+                },
+                {
+                    shortcut: CONFIG.shortcuts.copyMsgIdAsPlain,
+                    handler: () => copyMsgIdsGroup?.runShortcut?.('plain')
+                },
+                {
+                    shortcut: CONFIG.shortcuts.extractBusinessKeysAsTable,
+                    handler: () => businessKeysGroup?.runShortcut?.('table')
+                },
+                {
+                    shortcut: CONFIG.shortcuts.findReferencedRow,
+                    handler: () => findReferencedRow()
+                }
+            ];
 
             const updateButtonState = () => {
                 const baseEnabled = isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab();
@@ -1891,11 +2086,11 @@
                 attributeFilter: ['class']
             });
 
+            registerHelperPanelShortcuts(shortcutHandlers);
             updateButtonState();
         });
     }
 
     console.log('Orchestra Helper Functions loaded');
     initializeHelperPanel();
-    registerHelperPanelShortcuts();
 })();
