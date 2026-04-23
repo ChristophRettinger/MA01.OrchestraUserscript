@@ -108,7 +108,7 @@
     };
     const SEARCH_MSGID_LABEL = 'Search MSGID';
     const PROCESS_REFERENCE_COLUMN_INDEX = 5;
-    const PROCESS_NOTE_COLUMN_INDEX = 18;
+    const PROCESS_NOTE_COLUMN_INDEX = 17;
 
     const delay = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
