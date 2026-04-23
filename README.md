@@ -35,7 +35,7 @@ The Userscript provides functionalities for the Orchestra Monitor website. It ca
   * Selects the related process row for restart chains in either direction.
   * If the selected row contains `Created as copy of V:...`, the helper selects that referenced source row.
   * If the selected row is the source row, the helper finds the copied/restarted row that references it.
-  * The command is always enabled; when no relation is found, a warning toast is shown.
+  * The command is enabled on the process tables only (Process overview → **Details** or **Business view** tab); when no relation is found, a warning toast is shown.
 
 ## Availability
 
