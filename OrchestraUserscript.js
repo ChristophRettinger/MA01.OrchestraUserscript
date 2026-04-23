@@ -2033,12 +2033,13 @@
                 isEnabled: canCopyScenarioNames
             });
 
+            // Referenced-row lookup is only meaningful on process tables (Details / Business view).
             const findReferencedRowButton = addButton(host, {
                 label: 'Find referenced row',
                 icon: '🔁',
                 title: `Find referenced row (${shortcutToLabel(CONFIG.shortcuts.findReferencedRow)})`,
                 onClick: findReferencedRow,
-                isEnabled: () => true
+                isEnabled: () => isProcessesContext() && hasReadableRows() && isDetailsOrBusinessViewTab()
             });
 
             const buttons = [searchMsgIdGroup, copyMsgIdsGroup, businessKeysGroup, startupInfoGroup, copyScenarioNamesGroup, findReferencedRowButton].filter(Boolean);
